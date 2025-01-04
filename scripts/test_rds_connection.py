@@ -1,20 +1,43 @@
 import psycopg2
+from psycopg2 import OperationalError
 
-# Database connection details
-host = "baseballmvp.czww6cykwaoo.us-east-2.rds.amazonaws.com"       # Replace with your RDS endpoint
-database = "baseball_mvp"  # Replace with your database name
-user = "admin1"           # Replace with your username
-password = "RockCreek32!"       # Replace with your password
+# Supabase connection details
+host = "aws-0-us-east-2.pooler.supabase.com"
+database = "postgres"
+user = "postgres.chcovbrcpmlxyauansqe"
+password = "1Z4IO6fxxYw8PgxL"  # Replace with your Supabase password
+port = 5432  # Default PostgreSQL port
 
 try:
-    # Connect to RDS
+    # Connect to Supabase
     conn = psycopg2.connect(
         host=host,
         database=database,
         user=user,
-        password=password
+        password=password,
+        port=port
     )
-    print("Connected to RDS successfully!")
+    print("Connected to Supabase PostgreSQL database successfully!")
     conn.close()
-except Exception as e:
-    print(f"Error connecting to RDS: {e}")
+except OperationalError as e:
+    print(f"Error connecting to Supabase: {e}")
+
+try:
+    # Connect to Supabase
+    conn = psycopg2.connect(
+        host=host,
+        database=database,
+        user=user,
+        password=password,
+        port=port
+    )
+    cursor = conn.cursor()
+    # Test query
+    cursor.execute("SELECT current_date;")
+    result = cursor.fetchone()
+    print(f"Query result: {result}")
+    cursor.close()
+    conn.close()
+except OperationalError as e:
+    print(f"Error connecting to Supabase: {e}")
+
