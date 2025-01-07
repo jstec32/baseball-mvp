@@ -78,8 +78,8 @@ def fetch_and_save_statcast_data(start_date, end_date):
         print(f"Error processing data for {start_date} to {end_date}: {e}")
 
 # Loop through date ranges (2020-2023) and fetch data in monthly chunks
-start_year = 2021
-end_year = 2023
+start_year = 2019
+end_year = 2020
 
 for year in range(start_year, end_year + 1):
     for month in range(1, 13):
@@ -90,4 +90,3 @@ for year in range(start_year, end_year + 1):
             end_date = (datetime(year, month + 1, 1) - timedelta(days=1)).strftime("%Y-%m-%d")
         fetch_and_save_statcast_data(start_date, end_date)
 
-fetch_and_save_statcast_data('2020-04-01', '2020-04-31')

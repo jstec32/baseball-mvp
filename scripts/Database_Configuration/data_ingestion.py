@@ -8,7 +8,7 @@ data = statcast('2023-10-04')  # Adjust dates as needed
 print("Data fetched successfully!")
 
 # Step 2: Save the data locally
-file_name = "../statcast_2023.csv"
+file_name = "../../docs/statcast_2023.csv"
 data.to_csv(file_name, index=False)
 print(f"Data saved locally as {file_name}")
 
