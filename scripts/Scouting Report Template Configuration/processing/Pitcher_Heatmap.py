@@ -25,8 +25,8 @@ def get_db_connection():
         return None
 
 
-# SQL query to fetch pitch location data
-def fetch_pitch_data(pitcher_id):
+# SQL queries for pitcher and hitter data
+def fetch_pitcher_data(pitcher_id):
     """
     Fetch pitch type and location data for a specific pitcher.
     """
@@ -45,45 +45,93 @@ def fetch_pitch_data(pitcher_id):
         return None
 
     try:
-        # Execute the query and fetch the results
         cursor = connection.cursor()
         cursor.execute(query)
         results = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
         return pd.DataFrame(results, columns=columns)
     except Exception as e:
-        print(f"Error fetching data: {e}")
+        print(f"Error fetching pitcher data: {e}")
         return None
     finally:
         connection.close()
 
 
-# Generate heatmaps with strike zone overlay
-def generate_heatmaps(data):
+def fetch_hitter_data(hitter_id):
     """
-    Generate heatmaps for each pitch type with MLB strike zone overlay and standardized axes.
+    Fetch batted ball data for a specific hitter with positive outcomes.
     """
-    if data is None or data.empty:
-        print("No data to generate heatmaps.")
+    query = f"""
+    SELECT 
+        pd.pitch_type,
+        pd.plate_x,
+        pd.plate_z,
+        pd.launch_speed
+    FROM pitch_data pd
+    WHERE pd.batter_id = '{hitter_id}'
+      AND pd.events IN ('single', 'double', 'triple', 'home_run')
+      AND pd.launch_speed IS NOT NULL
+    ORDER BY pd.launch_speed DESC;
+    """
+    connection = get_db_connection()
+    if not connection:
+        return None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(query)
+        results = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        return pd.DataFrame(results, columns=columns)
+    except Exception as e:
+        print(f"Error fetching hitter data: {e}")
+        return None
+    finally:
+        connection.close()
+
+
+# Generate combined heatmap for each pitch type
+def generate_combined_heatmaps(pitcher_data, hitter_data):
+    """
+    Generate combined heatmaps for each pitch type.
+    """
+    if pitcher_data is None or pitcher_data.empty:
+        print("No pitcher data available.")
+        return
+    if hitter_data is None or hitter_data.empty:
+        print("No hitter data available.")
         return
 
-    for pitch in data['pitch_type'].unique():
-        pitch_data = data[data['pitch_type'] == pitch]
+    pitch_types = pitcher_data['pitch_type'].unique()
+    for pitch_type in pitch_types:
+        pitcher_pitch_data = pitcher_data[pitcher_data['pitch_type'] == pitch_type]
+        hitter_pitch_data = hitter_data[hitter_data['pitch_type'] == pitch_type]
 
-        # Create the heatmap
-        sns.kdeplot(x=pitch_data['plate_x'], y=pitch_data['plate_z'], cmap='Reds', fill=True)
+        # Plot pitcher heatmap
+        sns.kdeplot(x=pitcher_pitch_data['plate_x'], y=pitcher_pitch_data['plate_z'], cmap='Reds', fill=True, alpha=0.5)
+
+        # Plot hitter heatmap
+        if not hitter_pitch_data.empty:
+            sns.kdeplot(x=hitter_pitch_data['plate_x'], y=hitter_pitch_data['plate_z'], cmap='Blues', fill=True,
+                        alpha=0.5)
 
         # Add MLB strike zone
-        plt.gca().add_patch(Rectangle((-0.83, 1.5), 1.66, 2, fill=False, color='blue', linewidth=2))
+        plt.gca().add_patch(Rectangle((-0.83, 1.5), 1.66, 2, fill=False, color='black', linewidth=2))
 
         # Standardize axes for consistency
-        plt.xlim(-2.0, 2.0)  # Standard horizontal limits
-        plt.ylim(0.0, 5.0)   # Standard vertical limits
+        plt.xlim(-2.0, 2.0)
+        plt.ylim(0.0, 5.0)
 
         # Set plot labels and title
-        plt.title(f'Pitch Location Heatmap: {pitch}')
+        plt.title(f'Combined Heatmap for {pitch_type}')
         plt.xlabel('Plate X')
         plt.ylabel('Plate Z')
+
+        # Add custom legend
+        plt.legend(handles=[
+            plt.Line2D([0], [0], color='red', lw=4, label='Pitcher'),
+            plt.Line2D([0], [0], color='blue', lw=4, label='Hitter')
+        ])
 
         # Show plot
         plt.show()
@@ -92,13 +140,17 @@ def generate_heatmaps(data):
 # Main function
 def main():
     pitcher_id = '453286'  # Example pitcher ID
-    pitch_data = fetch_pitch_data(pitcher_id)
+    hitter_id = '664023'  # Example hitter ID
 
-    if pitch_data is not None:
-        print(f"Fetched {len(pitch_data)} rows of data.")
-        generate_heatmaps(pitch_data)
+    pitcher_data = fetch_pitcher_data(pitcher_id)
+    hitter_data = fetch_hitter_data(hitter_id)
+
+    if pitcher_data is not None and hitter_data is not None:
+        print(f"Fetched {len(pitcher_data)} rows of pitcher data.")
+        print(f"Fetched {len(hitter_data)} rows of hitter data.")
+        generate_combined_heatmaps(pitcher_data, hitter_data)
     else:
-        print("Failed to fetch pitch data.")
+        print("Failed to fetch data.")
 
 
 if __name__ == "__main__":
