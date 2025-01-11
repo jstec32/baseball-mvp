@@ -51,12 +51,8 @@ def fetch_pitch_arsenal(pitcher_id):
         return None
 
 # Generate a bar chart for Usage Rate
-def plot_usage_rate(data, pitcher_id):
-    if data is None or data.empty:
-        print("No data to visualize.")
-        return
+def plot_usage_rate(data, pitcher_id, return_fig=False):
 
-    # Bar chart for Usage %
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.bar(data['pitch_type'], data['usage_percent'], color='skyblue')
 
@@ -70,26 +66,24 @@ def plot_usage_rate(data, pitcher_id):
     ax.set_xlabel("Pitch Type", fontsize=12)
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.show()
+
+    if return_fig:
+        return fig
+    else:
+        plt.show()
+
 
 # Generate a table for other stats
-def plot_pitch_arsenal_table(data, pitcher_id):
-    if data is None or data.empty:
-        print("No data to visualize.")
-        return
+def plot_pitch_arsenal_table(data, pitcher_id, return_fig=False):
 
-    # Visualization: Table
     fig, ax = plt.subplots(figsize=(10, len(data) * 0.5))  # Adjust height based on rows
     ax.axis('tight')
     ax.axis('off')
 
-    # Remove usage_percent column since it's visualized in the bar chart
-    data_for_table = data
-
     # Create the table
     table = ax.table(
-        cellText=data_for_table.values,
-        colLabels=data_for_table.columns,
+        cellText=data.values,
+        colLabels=data.columns,
         cellLoc='center',
         loc='center'
     )
@@ -97,25 +91,36 @@ def plot_pitch_arsenal_table(data, pitcher_id):
     # Style the table
     table.auto_set_font_size(False)
     table.set_fontsize(10)
-    table.auto_set_column_width(col=list(range(len(data_for_table.columns))))
+    table.auto_set_column_width(col=list(range(len(data.columns))))
 
     # Add a title
     plt.title(f"Pitch Arsenal Details for Pitcher (ID: {pitcher_id})", fontsize=14)
-    plt.show()
 
-# Main function for manual testing
-def main():
-    # Replace with the desired pitcher_id for testing
-    pitcher_id = "543037"  # Example pitcher_id
+    if return_fig:
+        return fig
+    else:
+        plt.show()
+
+
+def generate_pitch_arsenal_visual(pitcher_id):
 
     # Fetch the data
     pitch_arsenal_data = fetch_pitch_arsenal(pitcher_id)
 
-    # Visualize usage rate
-    plot_usage_rate(pitch_arsenal_data, pitcher_id)
+    if pitch_arsenal_data is None or pitch_arsenal_data.empty:
+        print(f"No pitch arsenal data available for pitcher_id: {pitcher_id}")
+        return None
 
-    # Visualize pitch arsenal table
-    plot_pitch_arsenal_table(pitch_arsenal_data, pitcher_id)
+    print(f"Fetched {len(pitch_arsenal_data)} rows of pitch arsenal data for pitcher_id: {pitcher_id}")
+
+    # Generate usage rate figure
+    usage_rate_fig = plot_usage_rate(pitch_arsenal_data, pitcher_id, return_fig=True)
+
+    # Generate pitch arsenal table figure
+    arsenal_table_fig = plot_pitch_arsenal_table(pitch_arsenal_data, pitcher_id, return_fig=True)
+
+    return {"usage_rate": usage_rate_fig, "arsenal_table": arsenal_table_fig}
+
 
 if __name__ == "__main__":
     main()

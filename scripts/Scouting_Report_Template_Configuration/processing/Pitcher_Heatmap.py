@@ -137,22 +137,38 @@ def generate_combined_heatmaps(pitcher_data, hitter_data):
         plt.show()
 
 
-# Main function
-def main():
-    pitcher_id = '453286'  # Example pitcher ID
-    hitter_id = '664023'  # Example hitter ID
-
+def generate_pitcher_heatmap_visual(pitcher_id, hitter_id):
     pitcher_data = fetch_pitcher_data(pitcher_id)
     hitter_data = fetch_hitter_data(hitter_id)
 
-    if pitcher_data is not None and hitter_data is not None:
-        print(f"Fetched {len(pitcher_data)} rows of pitcher data.")
-        print(f"Fetched {len(hitter_data)} rows of hitter data.")
-        generate_combined_heatmaps(pitcher_data, hitter_data)
-    else:
-        print("Failed to fetch data.")
+    if pitcher_data is None or hitter_data is None:
+        print(f"No data available for pitcher_id: {pitcher_id} or hitter_id: {hitter_id}")
+        return None
 
+    heatmaps = {}
+    unique_pitch_types = pitcher_data['pitch_type'].unique()
 
-if __name__ == "__main__":
-    main()
+    for pitch_type in unique_pitch_types:
+        pitcher_pitch_data = pitcher_data[pitcher_data['pitch_type'] == pitch_type]
+        hitter_pitch_data = hitter_data[hitter_data['pitch_type'] == pitch_type]
+
+        if pitcher_pitch_data.empty or hitter_pitch_data.empty:
+            continue
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.kdeplot(
+            x=pitcher_pitch_data['plate_x'], y=pitcher_pitch_data['plate_z'],
+            cmap='Reds', fill=True, alpha=0.5, ax=ax, warn_singular=False
+        )
+        sns.kdeplot(
+            x=hitter_pitch_data['plate_x'], y=hitter_pitch_data['plate_z'],
+            cmap='Blues', fill=True, alpha=0.5, ax=ax, warn_singular=False
+        )
+        ax.set_title(f"Heatmap for {pitch_type} (Pitcher ID: {pitcher_id})")
+        ax.set_xlabel("Plate X")
+        ax.set_ylabel("Plate Z")
+        heatmaps[pitch_type] = fig
+
+    return heatmaps
+
 
