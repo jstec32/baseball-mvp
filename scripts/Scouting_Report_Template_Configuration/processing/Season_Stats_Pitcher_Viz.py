@@ -28,8 +28,10 @@ SELECT
     sps.whip,
     sps.k_percent AS k_percentage,
     sps.bb_percent AS bb_percentage,
-    sps.fip,
-    sps.xfip
+    sps.hr_per_9,
+    sps.ld_percent,
+    sps.gb_percent,
+    sps.flyball_percent
 FROM season_pitching_statistics sps
 JOIN players_with_team pwt
     ON CONCAT(pwt."First_Name", ' ', pwt."Last_Name") = sps.name
@@ -61,13 +63,23 @@ def fetch_season_stats(key_mlbam):
         print(f"Error fetching data: {e}")
         return None
 
+# Format percentages in the DataFrame
+def format_percentages(data):
+    percentage_columns = ["k_percentage", "bb_percentage", "ld_percent", "gb_percent", "flyball_percent"]
+    for column in percentage_columns:
+        if column in data.columns:
+            data[column] = (data[column] * 100).round(2).astype(str) + '%'  # Convert to percentage format
+    return data
+
 # Generate a table visualization for season stats
 def visualize_season_stats_table(data, key_mlbam):
-    if data is None or data.empty:
-        print("No data to visualize.")
-        return
+    """
+    Visualize season stats as a table.
 
-    # Visualization: Table
+    :param data: DataFrame containing season stats.
+    :param key_mlbam: The pitcher ID.
+    :return: Matplotlib figure containing the table.
+    """
     fig, ax = plt.subplots(figsize=(10, len(data) * 0.5))  # Adjust height based on rows
     ax.axis('tight')
     ax.axis('off')
@@ -80,25 +92,18 @@ def visualize_season_stats_table(data, key_mlbam):
         loc='center'
     )
 
-    # Style the table
     table.auto_set_font_size(False)
     table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
 
-    # Add a title
-    plt.title(f"Season Stats for Pitcher (ID: {key_mlbam})", fontsize=14)
-    plt.show()
+    plt.title(f"Pitcher Season Stats (ID: {key_mlbam})", fontsize=14)
+    return fig
 
-# Main function for manual testing
-def main():
-    # Replace with the desired key_mlbam for testing
-    key_mlbam = '543037'  # Example key_mlbam
 
-    # Fetch the data
+def generate_season_stats_viz(key_mlbam):
     season_stats_data = fetch_season_stats(key_mlbam)
-
-    # Visualize season stats table
-    visualize_season_stats_table(season_stats_data, key_mlbam)
-
-if __name__ == "__main__":
-    main()
+    if season_stats_data is None or season_stats_data.empty:
+        print(f"No season stats available for key_mlbam: {key_mlbam}")
+        return None
+    fig = visualize_season_stats_table(season_stats_data, key_mlbam)
+    return fig
