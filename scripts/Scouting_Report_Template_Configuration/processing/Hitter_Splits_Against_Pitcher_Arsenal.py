@@ -1,6 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import psycopg2
+from scripts.Database_Configuration.visualization_config import  apply_global_styles
+
 
 # Database configuration
 DB_CONFIG = {
@@ -75,7 +77,7 @@ def fetch_hitter_splits(pitcher_id, hitter_id):
 # Generate a table visualization
 def plot_hitter_splits_table(data, hitter_id, return_fig=False):
 
-    fig, ax = plt.subplots(figsize=(10, len(data) * 0.5))  # Adjust height based on rows
+    fig, ax = plt.subplots(figsize=(8, len(data) * 0.6))  # Adjust height based on rows
     ax.axis('tight')
     ax.axis('off')
 
@@ -92,8 +94,8 @@ def plot_hitter_splits_table(data, hitter_id, return_fig=False):
     table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
 
-    # Add a title
-    plt.title(f"Hitter Splits Against Arsenal (Hitter ID: {hitter_id})", fontsize=14)
+    ax.set_title(f"Splits against pitcher's arsenal", fontsize=16)
+
 
     if return_fig:
         return fig
@@ -103,7 +105,7 @@ def plot_hitter_splits_table(data, hitter_id, return_fig=False):
 
 # Main function for manual testing
 def generate_hitter_splits_visual(pitcher_id, hitter_id):
-
+    apply_global_styles()
     # Fetch the data
     hitter_splits_data = fetch_hitter_splits(pitcher_id, hitter_id)
 

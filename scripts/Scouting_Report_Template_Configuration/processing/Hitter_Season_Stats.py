@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import psycopg2
+from scripts.Database_Configuration.visualization_config import  apply_global_styles
 
 # Database configuration
 DB_CONFIG = {
@@ -82,6 +83,7 @@ def fetch_recent_hitter_stats_and_name(key_mlbam):
 
 # Visualize most recent hitter stats as a table
 def visualize_recent_hitter_stats_table(data, hitter_name, return_fig=False):
+    apply_global_styles()
 
     # Format percentages
     percentage_columns = ["ld_percent", "gb_percent", "fb_percent", "bb_percent", "k_percent"]
@@ -90,8 +92,7 @@ def visualize_recent_hitter_stats_table(data, hitter_name, return_fig=False):
             data[column] = (data[column] * 100).round(2)
 
     # Create the figure
-    fig, ax = plt.subplots(figsize=(8, 2))
-    ax.axis('tight')
+    fig, ax = plt.subplots(figsize=(8, 4))
     ax.axis('off')
 
     # Create the table
@@ -107,8 +108,9 @@ def visualize_recent_hitter_stats_table(data, hitter_name, return_fig=False):
     table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
 
-    # Add a title
-    plt.title(f"{hitter_name}'s Season Stats", fontsize=14)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+    ax.set_title(f"Season Stats for  (ID: {hitter_name})", fontsize=16)
 
     if return_fig:
         return fig

@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import psycopg2
+from scripts.Database_Configuration.visualization_config import  apply_global_styles
 
 # Database configuration
 DB_CONFIG = {
@@ -40,6 +41,25 @@ WHERE pwt.key_mlbam = %s
 ORDER BY sps.season DESC;
 """
 
+def fetch_player_name(player_id):
+    query = """
+    SELECT CONCAT("First_Name", ' ', "Last_Name") AS player_name
+    FROM players
+    WHERE key_mlbam = %s;
+    """
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        cursor.execute(query, (player_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return result[0] if result else None
+    except Exception as e:
+        print(f"Error fetching player name: {e}")
+        return None
+
+
 # Fetch data from the database
 def fetch_season_stats(key_mlbam):
     try:
@@ -73,14 +93,16 @@ def format_percentages(data):
 
 # Generate a table visualization for season stats
 def visualize_season_stats_table(data, key_mlbam):
-    """
-    Visualize season stats as a table.
+    apply_global_styles()
+    # Fetch the player's name using their key_mlbam
+    player_name = fetch_player_name(key_mlbam)  # Ensure this function exists and works correctly
 
-    :param data: DataFrame containing season stats.
-    :param key_mlbam: The pitcher ID.
-    :return: Matplotlib figure containing the table.
-    """
-    fig, ax = plt.subplots(figsize=(10, len(data) * 0.5))  # Adjust height based on rows
+    # Handle cases where the name is unavailable
+    if not player_name:
+        player_name = "Unknown Player"
+
+    # Create the figure and table visualization
+    fig, ax = plt.subplots(figsize=(8, len(data) * 0.6))  # Adjust height based on rows
     ax.axis('tight')
     ax.axis('off')
 
@@ -96,7 +118,9 @@ def visualize_season_stats_table(data, key_mlbam):
     table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
 
-    plt.title(f"Pitcher Season Stats (ID: {key_mlbam})", fontsize=14)
+    # Use the player's name in the title
+    ax.set_title(f"Season stats for: {player_name}", fontsize=16)
+
     return fig
 
 

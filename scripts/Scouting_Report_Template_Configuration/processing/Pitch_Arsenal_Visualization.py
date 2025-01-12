@@ -61,7 +61,7 @@ def plot_usage_rate(data, pitcher_id, return_fig=False):
         ax.text(i, value + 1, f"{value:.2f}%", ha='center', fontsize=10)
 
     # Chart customization
-    ax.set_title(f"Pitch Usage Rate for Pitcher (ID: {pitcher_id})", fontsize=16)
+    ax.set_title(f"Pitch Usage Rate for Pitcher", fontsize=16)
     ax.set_ylabel("Usage %", fontsize=12)
     ax.set_xlabel("Pitch Type", fontsize=12)
     plt.grid(axis='y', linestyle='--', alpha=0.7)
@@ -76,7 +76,7 @@ def plot_usage_rate(data, pitcher_id, return_fig=False):
 # Generate a table for other stats
 def plot_pitch_arsenal_table(data, pitcher_id, return_fig=False):
 
-    fig, ax = plt.subplots(figsize=(10, len(data) * 0.5))  # Adjust height based on rows
+    fig, ax = plt.subplots(figsize=(4, len(data) * 0.6))  # Adjust height based on rows
     ax.axis('tight')
     ax.axis('off')
 
@@ -93,8 +93,6 @@ def plot_pitch_arsenal_table(data, pitcher_id, return_fig=False):
     table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
 
-    # Add a title
-    plt.title(f"Pitch Arsenal Details for Pitcher (ID: {pitcher_id})", fontsize=14)
 
     if return_fig:
         return fig
