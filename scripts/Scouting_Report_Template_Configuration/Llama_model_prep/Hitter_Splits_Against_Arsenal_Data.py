@@ -74,51 +74,66 @@ def fetch_hitter_splits(pitcher_id, hitter_id):
         print(f"Error fetching data: {e}")
         return None
 
-# Generate a table visualization
-def plot_hitter_splits_table(data, hitter_id, return_fig=False):
+def generate_hitter_splits_against_arsenal_data(pitcher_id, hitter_id):
 
-    fig, ax = plt.subplots(figsize=(8, len(data) * 0.6))  # Adjust height based on rows
-    ax.axis('tight')
-    ax.axis('off')
+    # Replace placeholders dynamically
+    query = SQL_QUERY_TEMPLATE.format(pitcher_id=pitcher_id, hitter_id=hitter_id)
 
-    # Create the table
-    table = ax.table(
-        cellText=data.values,
-        colLabels=data.columns,
-        cellLoc='center',
-        loc='center'
-    )
+    try:
+        # Connect to the database
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
 
-    # Style the table
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
-    table.auto_set_column_width(col=list(range(len(data.columns))))
+        # Execute the query
+        cursor.execute(query)
+        columns = [desc[0] for desc in cursor.description]
+        data = cursor.fetchall()
 
+        # Close connection
+        cursor.close()
+        conn.close()
 
+        if not data:
+            print(f"No splits data available for Pitcher ID: {pitcher_id} and Hitter ID: {hitter_id}")
+            return None
 
-    if return_fig:
-        return fig
-    else:
-        plt.show()
+        # Convert data to a DataFrame
+        splits_df = pd.DataFrame(data, columns=columns)
 
+        # Summarize the data into structured JSON-like format
+        structured_data = {
+            "pitcher_id": pitcher_id,
+            "hitter_id": hitter_id,
+            "splits": []
+        }
 
-# Main function for manual testing
-def generate_hitter_splits_visual(pitcher_id, hitter_id):
-    apply_global_styles()
-    # Fetch the data
-    hitter_splits_data = fetch_hitter_splits(pitcher_id, hitter_id)
+        for _, row in splits_df.iterrows():
+            structured_data["splits"].append({
+                "pitch_type": row["pitch_type"],
+                "hard_hit_rate_percent": row["hard_hit_rate_percent"],
+                "whiff_rate_percent": row["whiff_rate_percent"],
+                "slugging_percentage": row["slugging_percentage"]
+            })
 
-    if hitter_splits_data is None or hitter_splits_data.empty:
-        print(f"No hitter splits data available for pitcher_id: {pitcher_id} and hitter_id: {hitter_id}")
+        print("Structured data generated successfully.")
+        return structured_data
+
+    except Exception as e:
+        print(f"Error fetching data: {e}")
         return None
 
-    print(f"Fetched {len(hitter_splits_data)} rows of hitter splits data for pitcher_id: {pitcher_id} and hitter_id: {hitter_id}")
+if __name__ == "__main__":
+    pitcher_id = input("Enter Pitcher ID: ").strip()
+    hitter_id = input("Enter Hitter ID: ").strip()
+    result = generate_hitter_splits_against_arsenal_data(pitcher_id, hitter_id)
 
-    # Generate table figure
-    fig = plot_hitter_splits_table(hitter_splits_data, hitter_id, return_fig=True)
-
-    return {"hitter_splits_table": fig}
-
-
-
+    if result:
+        print("\nStructured Data Output:")
+        print(result)
+        print("\nSplits by Pitch Type:")
+        for split in result["splits"]:
+            print(f"Pitch Type: {split['pitch_type']}, Hard Hit Rate: {split['hard_hit_rate_percent']}%, "
+                  f"Whiff Rate: {split['whiff_rate_percent']}%, SLG: {split['slugging_percentage']}")
+    else:
+        print("No data found for the given Pitcher and Hitter IDs.")
 

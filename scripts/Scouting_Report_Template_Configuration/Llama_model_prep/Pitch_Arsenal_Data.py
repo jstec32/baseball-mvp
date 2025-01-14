@@ -103,7 +103,7 @@ def plot_pitch_arsenal_table(data, pitcher_id, return_fig=False):
         plt.show()
 
 
-def generate_pitch_arsenal_visual(pitcher_id):
+def generate_pitch_arsenal_data(pitcher_id):
 
     # Fetch the data
     pitch_arsenal_data = fetch_pitch_arsenal(pitcher_id)
@@ -114,16 +114,38 @@ def generate_pitch_arsenal_visual(pitcher_id):
 
     print(f"Fetched {len(pitch_arsenal_data)} rows of pitch arsenal data for pitcher_id: {pitcher_id}")
 
-    # Generate usage rate figure
-    usage_rate_fig = plot_usage_rate(pitch_arsenal_data, pitcher_id, return_fig=True)
+    # Summarize the data into structured JSON-like format
+    structured_data = {
+        "pitcher_id": pitcher_id,
+        "arsenal": []
+    }
 
-    # Generate pitch arsenal table figure
-    arsenal_table_fig = plot_pitch_arsenal_table(pitch_arsenal_data, pitcher_id, return_fig=True)
+    for _, row in pitch_arsenal_data.iterrows():
+        structured_data["arsenal"].append({
+            "pitch_type": row["pitch_type"],
+            "usage_percent": row["usage_percent"],
+            "avg_velocity": row["avg_velocity"],
+            "avg_horizontal_break": row["avg_horizontal_break"],
+            "avg_vertical_break": row["avg_vertical_break"],
+            "whiff_percent": row["whiff_percent"],
+            "strike_percent": row["strike_percent"]
+        })
 
-    return {"usage_rate": usage_rate_fig, "arsenal_table": arsenal_table_fig}
+    print("Structured data generated successfully.")
+    return structured_data
 
+if __name__ == "__main__":
+    pitcher_id = input("Enter Pitcher ID: ").strip()
+    result = generate_pitch_arsenal_data(pitcher_id)
 
-
-
-
-
+    if result:
+        print("\nStructured Data Output:")
+        print(result)
+        print("\nPitch Arsenal Summary:")
+        for pitch in result["arsenal"]:
+            print(f"Pitch Type: {pitch['pitch_type']}, Usage: {pitch['usage_percent']}%, "
+                  f"Velocity: {pitch['avg_velocity']} mph, H-Break: {pitch['avg_horizontal_break']}, "
+                  f"V-Break: {pitch['avg_vertical_break']}, Whiff%: {pitch['whiff_percent']}%, "
+                  f"Strike%: {pitch['strike_percent']}%")
+    else:
+        print("No data found for the given pitcher ID.")
