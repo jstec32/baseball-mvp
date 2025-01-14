@@ -115,56 +115,12 @@ def fetch_hitter_data(hitter_id):
         connection.close()
 
 
-# Generate combined heatmap for each pitch type
-def generate_combined_heatmaps(pitcher_data, hitter_data):
-
+def generate_pitcher_hitter_heatmap_data(pitcher_id, hitter_id):
+    """
+    Generate combined heatmaps for each pitch type and return structured data for LLaMA.
+    """
     apply_global_styles()
-
-    if pitcher_data is None or pitcher_data.empty:
-        print("No pitcher data available.")
-        return
-    if hitter_data is None or hitter_data.empty:
-        print("No hitter data available.")
-        return
-
-    pitch_types = pitcher_data['pitch_type'].unique()
-    for pitch_type in pitch_types:
-        pitcher_pitch_data = pitcher_data[pitcher_data['pitch_type'] == pitch_type]
-        hitter_pitch_data = hitter_data[hitter_data['pitch_type'] == pitch_type]
-
-        # Plot pitcher heatmap
-        sns.kdeplot(x=pitcher_pitch_data['plate_x'], y=pitcher_pitch_data['plate_z'], cmap='Reds', fill=True, alpha=0.5)
-
-        # Plot hitter heatmap
-        if not hitter_pitch_data.empty:
-            sns.kdeplot(x=hitter_pitch_data['plate_x'], y=hitter_pitch_data['plate_z'], cmap='Blues', fill=True,
-                        alpha=0.5)
-
-        # Add MLB strike zone
-        plt.gca().add_patch(Rectangle((-0.83, 1.5), 1.66, 2, fill=False, color='black', linewidth=2))
-
-        # Standardize axes for consistency
-        plt.xlim(-2.0, 2.0)
-        plt.ylim(0.0, 5.0)
-
-        # Set plot labels and title
-
-        plt.xlabel('Plate X')
-        plt.ylabel('Plate Z')
-
-        # Add custom legend
-        plt.legend(handles=[
-            plt.Line2D([0], [0], color='red', lw=4, label='Pitcher'),
-            plt.Line2D([0], [0], color='blue', lw=4, label='Hitter')
-        ])
-
-        # Show plot
-        plt.show()
-
-
-def generate_pitcher_heatmap_visual(pitcher_id, hitter_id):
-    apply_global_styles()
-    print(f"Generating heatmaps for Pitcher ID: {pitcher_id} and Hitter ID: {hitter_id}...")
+    print(f"Generating heatmaps and data for Pitcher ID: {pitcher_id} and Hitter ID: {hitter_id}...")
 
     # Fetch pitcher and hitter names
     pitcher_name = fetch_player_name(pitcher_id)
@@ -185,6 +141,12 @@ def generate_pitcher_heatmap_visual(pitcher_id, hitter_id):
         print("No hitter data available.")
         return None
 
+    structured_data = {
+        "pitcher_name": pitcher_name,
+        "hitter_name": hitter_name,
+        "pitch_types": {}
+    }
+
     pitch_types = pitcher_data['pitch_type'].unique()
     num_pitch_types = len(pitch_types)
 
@@ -198,9 +160,22 @@ def generate_pitcher_heatmap_visual(pitcher_id, hitter_id):
         pitcher_pitch_data = pitcher_data[pitcher_data['pitch_type'] == pitch_type]
         hitter_pitch_data = hitter_data[hitter_data['pitch_type'] == pitch_type]
 
-        ax = combined_axes[i] if num_pitch_types > 1 else combined_axes  # Handle single subplot case
+        # Collect structured data for the current pitch type
+        structured_data["pitch_types"][pitch_type] = {
+            "pitcher_whiff_rate": len(pitcher_pitch_data) / len(pitcher_data),
+            "hitter_contact_rate": (
+                len(hitter_pitch_data) / len(hitter_data)
+                if not hitter_pitch_data.empty else 0
+            ),
+            "average_pitch_location": {
+                "plate_x": pitcher_pitch_data['plate_x'].mean(),
+                "plate_z": pitcher_pitch_data['plate_z'].mean()
+            }
+        }
 
-        # Plot pitcher heatmap
+        # Plot the heatmap
+        ax = combined_axes[i] if num_pitch_types > 1 else combined_axes
+
         sns.kdeplot(
             x=pitcher_pitch_data['plate_x'],
             y=pitcher_pitch_data['plate_z'],
@@ -209,10 +184,9 @@ def generate_pitcher_heatmap_visual(pitcher_id, hitter_id):
             alpha=0.5,
             ax=ax,
             warn_singular=False,
-            label=pitcher_name  # Use dynamic pitcher name
+            label=pitcher_name
         )
 
-        # Plot hitter heatmap (if data exists for the pitch type)
         if not hitter_pitch_data.empty:
             sns.kdeplot(
                 x=hitter_pitch_data['plate_x'],
@@ -222,59 +196,75 @@ def generate_pitcher_heatmap_visual(pitcher_id, hitter_id):
                 alpha=0.5,
                 ax=ax,
                 warn_singular=False,
-                label=hitter_name  # Use dynamic hitter name
+                label=hitter_name
             )
 
-        # Add MLB strike zone
-        ax.add_patch(Rectangle(
-            (-0.83, 1.5),  # Bottom-left corner of the strike zone
-            1.66,  # Width of the strike zone
-            2.0,  # Height of the strike zone
-            fill=False,
-            color='black',
-            linewidth=2
-        ))
-
-        # Standardize axes for consistency across all heatmaps
+        ax.add_patch(Rectangle((-0.83, 1.5), 1.66, 2.0, fill=False, color='black', linewidth=2))
         ax.set_xlim(-2.0, 2.0)
         ax.set_ylim(0.0, 5.0)
-
-        # Set plot title
         ax.set_title(f'{pitch_type}', fontsize=14)
         ax.set_xlabel('Plate X', fontsize=12)
         if i == 0:
-            ax.set_ylabel('Plate Z', fontsize=12)  # Only set ylabel for the first plot
+            ax.set_ylabel('Plate Z', fontsize=12)
 
-
-
-    # Add a combined legend for the entire figure
-    handles = [
-        plt.Line2D([0], [0], color='red', lw=4, label=pitcher_name),
-        plt.Line2D([0], [0], color='blue', lw=4, label=hitter_name)
-    ]
     combined_fig.legend(
-        handles=handles,
+        handles=[
+            plt.Line2D([0], [0], color='red', lw=4, label=pitcher_name),
+            plt.Line2D([0], [0], color='blue', lw=4, label=hitter_name)
+        ],
         loc='upper center',
         fontsize=12,
-        bbox_to_anchor=(0.5, -0.05),  # Adjust to position below the plots
-        ncol=2  # Horizontal layout for the legend
+        bbox_to_anchor=(0.5, -0.05),
+        ncol=2
     )
-
     combined_fig.tight_layout()
-    print("Combined heatmap figure generated in memory.")
-    return combined_fig  # Return the Matplotlib figure directly
 
-if __name__ == "__main__":
-    pitcher_id = input("Enter Pitcher ID: ")
-    hitter_id = input("Enter Hitter ID: ")
+    print("Combined heatmap figure and structured data generated.")
+    return {"structured_data": structured_data}
 
-    result = generate_pitcher_heatmap_visual(pitcher_id, hitter_id)
 
-    if result:
-        print(f"Combined heatmap saved at: {result['combined_heatmap_path']}")
-        # Display the combined heatmap
-        plt.imshow(plt.imread(result['combined_heatmap_path']))
-        plt.axis('off')
-        plt.show()
-    else:
-        print("Failed to generate heatmaps.")
+
+def test_generate_pitcher_hitter_heatmap_data():
+    """
+    Test the generate_pitcher_hitter_heatmap_data function with sample data.
+    """
+    # Example pitcher and hitter IDs
+    pitcher_id = "605400"  # Replace with actual pitcher ID
+    hitter_id = "518692"   # Replace with actual hitter ID
+
+    # Call the function
+    result = generate_pitcher_hitter_heatmap_data(pitcher_id, hitter_id)
+
+    # Check if the result is not None
+    if result is None:
+        print("Function returned None. Test failed.")
+        return
+
+    # Validate structured data
+    structured_data = result["structured_data"]
+    print("Structured Data Output:")
+    print(structured_data)
+
+    # Ensure all keys are present
+    required_keys = ["pitcher_name", "hitter_name", "pitch_types"]
+    for key in required_keys:
+        if key not in structured_data:
+            print(f"Missing key in structured data: {key}. Test failed.")
+            return
+
+    # Validate pitch types in structured data
+    if not structured_data["pitch_types"]:
+        print("No pitch types found in structured data. Test failed.")
+        return
+
+    for pitch_type, metrics in structured_data["pitch_types"].items():
+        print(f"Pitch Type: {pitch_type}")
+        print(f"  - Pitcher Whiff Rate: {metrics['pitcher_whiff_rate']}")
+        print(f"  - Hitter Contact Rate: {metrics['hitter_contact_rate']}")
+        print(f"  - Average Pitch Location: {metrics['average_pitch_location']}")
+
+
+    print("Test completed successfully.")
+
+# Run the test
+test_generate_pitcher_hitter_heatmap_data()

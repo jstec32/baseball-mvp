@@ -115,8 +115,8 @@ def fetch_statcast_data_by_month(start_date, end_date):
             current_month = current_date.month
 
 # Specify the date range
-start_date = "2024-03-01"
-end_date = "2024-11-20"
+start_date = "2022-03-01"
+end_date = "2022-11-20"
 
 # Fetch and save data for each month in the range
 fetch_statcast_data_by_month(start_date, end_date)

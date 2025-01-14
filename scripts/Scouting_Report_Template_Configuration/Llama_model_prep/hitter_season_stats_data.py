@@ -32,6 +32,12 @@ most_recent_season AS (
 SELECT 
     hs.season,
     hs.batting_average AS ba,
+    hs.on_base_percentage AS obp,
+    hs.slugging_percentage AS slg,
+    hs.home_runs AS hr,
+    hs.rbi,
+    hs.strikeouts,
+    hs.walks,
     hs.ops,
     hs.ld_percent,
     hs.gb_percent,
@@ -81,45 +87,12 @@ def fetch_recent_hitter_stats_and_name(key_mlbam):
         print(f"Error fetching data: {e}")
         return None, None
 
-# Visualize most recent hitter stats as a table
-def visualize_recent_hitter_stats_table(data, hitter_name, return_fig=False):
-    apply_global_styles()
-
-    # Format percentages
-    percentage_columns = ["ld_percent", "gb_percent", "fb_percent", "bb_percent", "k_percent"]
-    for column in percentage_columns:
-        if column in data.columns:
-            data[column] = (data[column] * 100).round(2)
-
-    # Create the figure
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.axis('off')
-
-    # Create the table
-    table = ax.table(
-        cellText=data.values,
-        colLabels=data.columns,
-        cellLoc='center',
-        loc='center'
-    )
-
-    # Style the table
-    table.auto_set_font_size(False)
-
-    table.auto_set_column_width(col=list(range(len(data.columns))))
-
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-
-
-    if return_fig:
-        return fig
-    else:
-        plt.show()
-
 
 # Main function for testing
-def generate_hitter_season_stats_visual(key_mlbam):
-
+def generate_hitter_season_stats_data(key_mlbam):
+    """
+    Fetch and process season stats for a given hitter ID and return structured data.
+    """
     # Fetch hitter stats and name
     recent_hitter_stats, hitter_name = fetch_recent_hitter_stats_and_name(key_mlbam)
 
@@ -129,12 +102,40 @@ def generate_hitter_season_stats_visual(key_mlbam):
 
     print(f"Fetched stats for {hitter_name}.")
 
-    # Generate the table visualization
-    fig = visualize_recent_hitter_stats_table(recent_hitter_stats, hitter_name, return_fig=True)
+    # Summarize stats into structured data
+    structured_data = {
+        "hitter_id": key_mlbam,
+        "name": hitter_name,
+        "season_stats": []
+    }
 
-    return {"hitter_stats_fig": fig}
+    for _, row in recent_hitter_stats.iterrows():
+        structured_data["season_stats"].append({
+            "season": row["season"],
+            "ba": row.get("ba", None),  # Batting Average
+            "obp": row.get("obp", None),  # On-Base Percentage
+            "slg": row.get("slg", None),  # Slugging Percentage
+            "ops": row.get("ops", None),  # On-Base Plus Slugging
+            "hr": row.get("hr", None),  # Home Runs
+            "rbi": row.get("rbi", None),  # Runs Batted In
+            "strikeouts": row.get("strikeouts", None),  # Total Strikeouts
+            "walks": row.get("walks", None)  # Total Walks
+        })
 
+    print("Structured data generated successfully.")
+    return structured_data
 
+if __name__ == "__main__":
+    hitter_id = input("Enter Hitter ID: ").strip()
+    result = generate_hitter_season_stats_data(hitter_id)
 
-
-
+    if result:
+        print("\nStructured Data Output:")
+        print(result)
+        print("\nSeason Stats:")
+        for season in result["season_stats"]:
+            print(f"Season: {season['season']}, BA: {season['ba']}, OBP: {season['obp']}, "
+                  f"SLG: {season['slg']}, OPS: {season['ops']}, HR: {season['hr']}, "
+                  f"RBI: {season['rbi']}, SO: {season['strikeouts']}, BB: {season['walks']}")
+    else:
+        print("No data found for the given hitter ID.")

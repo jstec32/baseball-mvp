@@ -124,10 +124,53 @@ def visualize_season_stats_table(data, key_mlbam):
     return fig
 
 
-def generate_season_stats_viz(key_mlbam):
+def generate_pitcher_season_stats_data(key_mlbam):
+    """
+    Fetch and process season stats for a given pitcher ID and return structured data.
+    """
     season_stats_data = fetch_season_stats(key_mlbam)
     if season_stats_data is None or season_stats_data.empty:
         print(f"No season stats available for key_mlbam: {key_mlbam}")
         return None
-    fig = visualize_season_stats_table(season_stats_data, key_mlbam)
-    return fig
+
+    # Format percentages for easier reading
+    formatted_data = format_percentages(season_stats_data)
+
+    # Summarize the data into a structured dictionary
+    structured_data = {
+        "pitcher_id": key_mlbam,
+        "season_stats": []
+    }
+
+    for _, row in formatted_data.iterrows():
+        structured_data["season_stats"].append({
+            "season": row["season"],
+            "ip": row["ip"],
+            "era": row["era"],
+            "whip": row["whip"],
+            "k_percentage": row["k_percentage"],
+            "bb_percentage": row["bb_percentage"],
+            "hr_per_9": row["hr_per_9"],
+            "ld_percent": row["ld_percent"],
+            "gb_percent": row["gb_percent"],
+            "flyball_percent": row["flyball_percent"]
+        })
+
+    print("Structured data generated successfully.")
+    return structured_data
+
+# Testing Component
+if __name__ == "__main__":
+    pitcher_id = input("Enter Pitcher ID: ").strip()
+    result = generate_pitcher_season_stats_data(pitcher_id)
+
+    if result:
+        print("\nStructured Data Output:")
+        print(result)
+        print("\nSeason Stats:")
+        for season in result["season_stats"]:
+            print(f"Season: {season['season']}, ERA: {season['era']}, WHIP: {season['whip']}, "
+                  f"K%: {season['k_percentage']}, BB%: {season['bb_percentage']}, HR/9: {season['hr_per_9']}, "
+                  f"LD%: {season['ld_percent']}, GB%: {season['gb_percent']}, FB%: {season['flyball_percent']}")
+    else:
+        print("No data found for the given pitcher ID.")
