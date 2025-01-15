@@ -1,77 +1,156 @@
-import os
 import pandas as pd
+import os
+from collections import defaultdict
+import json
 
 
-def aggregate_statcast_data_by_year(csv_dir, output_dir):
+def aggregate_specific_matchup_data(csv_directory, output_path):
     """
-    Aggregate Statcast data by year, summarizing batter-pitcher matchups.
+    Aggregate specific matchup data for batter-pitcher pairs.
     """
-    yearly_stats = {}
+    matchup_data = []
+    for file in os.listdir(csv_directory):
+        if file.endswith(".csv"):
+            file_path = os.path.join(csv_directory, file)
+            print(f"Processing file: {file}")
+            data = pd.read_csv(file_path)
 
-    for file_name in os.listdir(csv_dir):
-        if file_name.endswith(".csv"):
+            # Group by batter-pitcher pair
+            grouped = data.groupby(["batter_id", "pitcher_id"])
+
+            for (batter_id, pitcher_id), group in grouped:
+                total_pitches = len(group)
+                most_common_pitch = group["pitch_type"].mode()[0] if not group["pitch_type"].mode().empty else None
+
+                # Calculate zone distribution
+                zone_distribution = (
+                    group["zone"]
+                    .value_counts(normalize=True)
+                    .to_dict()
+                )
+
+                # Aggregate outcomes
+                total_batted_balls = group[group["events"].notnull()].shape[0]
+
+                # Append to matchup data
+                matchup_data.append({
+                    "batter_id": batter_id,
+                    "pitcher_id": pitcher_id,
+                    "total_pitches": total_pitches,
+                    "most_common_pitch": most_common_pitch,
+                    "zone_distribution": json.dumps(zone_distribution),  # Store as JSON for easy reading
+                    "total_batted_balls": total_batted_balls
+                })
+
+    # Save aggregated data
+    output_df = pd.DataFrame(matchup_data)
+    output_file = os.path.join(output_path, "specific_matchup_data.csv")
+    output_df.to_csv(output_file, index=False)
+    print(f"Specific matchup data saved to: {output_file}")
+
+def aggregate_similar_matchups(csv_directory, output_path):
+    """
+    Aggregate data for similar matchups based on player archetypes.
+    """
+    similar_matchup_data = []
+    for file in os.listdir(csv_directory):
+        if file.endswith(".csv"):
+            file_path = os.path.join(csv_directory, file)
+            print(f"Processing file: {file}")
+            data = pd.read_csv(file_path)
+
+            # Define archetypes: Example - Power hitters and High-spin pitchers
+            data["hitter_archetype"] = data["launch_speed"].apply(lambda x: "Power Hitter" if x >= 95 else "Contact Hitter")
+            data["pitcher_archetype"] = data["release_spin_rate"].apply(lambda x: "High Spin" if x >= 2500 else "Average Spin")
+
+            grouped = data.groupby(["hitter_archetype", "pitcher_archetype"])
+
+            for (hitter_type, pitcher_type), group in grouped:
+                total_pitches = len(group)
+                zone_distribution = group["zone"].value_counts(normalize=True).to_dict()
+
+                similar_matchup_data.append({
+                    "hitter_archetype": hitter_type,
+                    "pitcher_archetype": pitcher_type,
+                    "total_pitches": total_pitches,
+                    "zone_distribution": json.dumps(zone_distribution)
+                })
+
+    # Save aggregated data
+    output_df = pd.DataFrame(similar_matchup_data)
+    output_file = os.path.join(output_path, "similar_matchup_data.csv")
+    output_df.to_csv(output_file, index=False)
+    print(f"Similar matchup data saved to: {output_file}")
+
+def process_league_wide_trends(input_directory, output_directory):
+    """
+    Process league-wide trends data, cleaning blank 'pitch_type' rows and aggregating data.
+
+    Args:
+        input_directory (str): Path to the directory with input CSV files.
+        output_directory (str): Path to save aggregated league-wide trends data.
+    """
+    os.makedirs(output_directory, exist_ok=True)
+
+    aggregated_data = []
+
+    for file in os.listdir(input_directory):
+        if file.endswith(".csv"):
+            input_path = os.path.join(input_directory, file)
+            print(f"Processing file: {file}")
+
             try:
-                year = file_name.split("_")[2]  # Extract year from filename
-                file_path = os.path.join(csv_dir, file_name)
-                print(f"Processing file: {file_name}")
+                # Read the CSV file
+                df = pd.read_csv(input_path)
 
-                # Read CSV
-                data = pd.read_csv(file_path)
+                # Remove rows where 'pitch_type' is blank
+                before_rows = len(df)
+                df = df[df['pitch_type'].notna()]
+                after_rows = len(df)
+                print(f"Removed {before_rows - after_rows} rows with blank 'pitch_type'.")
 
-                # Clean and prepare the data
-                data = data.dropna(subset=['pitch_type', 'description'])  # Ensure valid rows
-                data['is_batted_ball'] = data['events'].notna()
-
-                # Group and aggregate data
-                grouped = data.groupby(['batter_id', 'pitcher_id']).agg({
-                    'game_id': 'count',  # Total pitches
-                    'release_speed': 'mean',  # Average velocity
-                    'release_spin_rate': 'mean',  # Average spin rate
-                    'pfx_x': 'mean',  # Average horizontal break
-                    'pfx_z': 'mean',  # Average vertical break
-                    'plate_x': 'mean',  # Average plate x location
-                    'plate_z': 'mean',  # Average plate z location
-                    'is_batted_ball': 'sum',  # Total batted balls
-                    'pitch_type': lambda x: x.value_counts().idxmax(),  # Most common pitch type
-                    'zone': lambda x: x.value_counts(normalize=True).to_dict(),  # Zone distribution
+                # Aggregate league-wide trends
+                grouped = df.groupby('pitch_type').agg({
+                    'release_speed': 'mean',
+                    'release_spin_rate': 'mean',
+                    'pfx_x': 'mean',
+                    'pfx_z': 'mean',
+                    'plate_x': 'mean',
+                    'plate_z': 'mean',
+                    'zone': lambda x: x.value_counts(normalize=True).to_dict()
                 }).reset_index()
 
-                # Rename columns for clarity
-                grouped = grouped.rename(columns={
-                    'game_id': 'total_pitches',
+                grouped.rename(columns={
                     'release_speed': 'avg_velocity',
                     'release_spin_rate': 'avg_spin_rate',
                     'pfx_x': 'avg_horizontal_break',
                     'pfx_z': 'avg_vertical_break',
                     'plate_x': 'avg_plate_x',
                     'plate_z': 'avg_plate_z',
-                    'is_batted_ball': 'total_batted_balls',
-                    'pitch_type': 'most_common_pitch',
                     'zone': 'zone_distribution'
-                })
+                }, inplace=True)
 
-                # Aggregate per year
-                if year not in yearly_stats:
-                    yearly_stats[year] = []
-                yearly_stats[year].append(grouped)
+                # Append the processed data for the current file
+                aggregated_data.append(grouped)
 
             except Exception as e:
-                print(f"Error processing file {file_name}: {e}")
-                continue
+                print(f"Error processing {file}: {e}")
 
-    # Combine and save yearly stats
-    for year, stats_list in yearly_stats.items():
-        combined_data = pd.concat(stats_list, ignore_index=True)
-        output_file = os.path.join(output_dir, f"aggregated_statcast_{year}.csv")
-        combined_data.to_csv(output_file, index=False)
-        print(f"Aggregated data for {year} saved to {output_file}")
-
-
+    # Combine all aggregated data and save to a single file
+    if aggregated_data:
+        combined_data = pd.concat(aggregated_data, ignore_index=True)
+        output_path = os.path.join(output_directory, "league_wide_trends.csv")
+        combined_data.to_csv(output_path, index=False)
+        print(f"Aggregated league-wide trends saved to: {output_path}")
+    else:
+        print("No valid data processed.")
 
 # Specify the directory containing the monthly CSVs and output file
 csv_directory = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/StatCast CSV Data/S3_Data"
-output_directory = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/StatCast CSV Data/agg_data"
+output_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/StatCast CSV Data/Historical_Data_3Layers"
 
 # Run the aggregation function
-aggregate_statcast_data_by_year(csv_directory, output_directory)
+aggregate_specific_matchup_data(csv_directory, output_path)
+aggregate_similar_matchups(csv_directory, output_path)
+process_league_wide_trends(csv_directory, output_path)
 
