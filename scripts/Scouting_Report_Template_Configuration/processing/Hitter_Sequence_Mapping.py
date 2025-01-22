@@ -1,89 +1,73 @@
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+import os
 
-def analyze_pitch_sequences_from_sample(file_path, batter_id=None, pitcher_id=None):
-    """
-    Analyze pitch sequencing and hitter/pitcher performance by count using sample Statcast data,
-    optionally filtering for a specific batter and pitcher.
+def load_sort_flip_and_add_count_statcast_data_inplace(file_path):
 
-    Args:
-        file_path (str): Path to the sample Statcast CSV file.
-        batter_id (int, optional): Specific batter ID to filter the data. Defaults to None.
-        pitcher_id (int, optional): Specific pitcher ID to filter the data. Defaults to None.
+    # Step 1: Load the CSV into a DataFrame
+    statcast_data = pd.read_csv(file_path)
 
-    Outputs:
-        Visualizations of pitch sequencing and performance by count.
-    """
-    # Load the sample Statcast data
-    data = pd.read_csv(file_path)
+    # Step 2: Sort the data by game_date, game_id, inning, and inning_topbot
+    statcast_data = statcast_data.sort_values(
+        by=['game_date', 'game_id', 'inning', 'inning_topbot'],
+        ascending=[True, True, True, False]
+    )
 
-    # Filter for specific batter and/or pitcher if provided
-    if batter_id is not None:
-        data = data[data['batter_id'] == batter_id]
-    if pitcher_id is not None:
-        data = data[data['pitcher_id'] == pitcher_id]
+    # Step 3: Reset the index for cleanliness
+    statcast_data.reset_index(drop=True, inplace=True)
 
-    # Step 1: Derive balls and strikes based on the 'description' column
-    data['balls'] = data['description'].apply(lambda x: 1 if 'ball' in x.lower() else 0).cumsum()
-    data['strikes'] = data['description'].apply(
-        lambda x: 1 if x.lower() in ['swinging_strike', 'called_strike', 'foul'] else 0).cumsum()
+    # Step 4: Create a unique group ID for each batter-pitcher combination
+    statcast_data['group'] = (
+            (statcast_data['game_id'].astype(str) + '_' +
+             statcast_data['inning'].astype(str) + '_' +
+             statcast_data['inning_topbot'].astype(str) + '_' +
+             statcast_data['pitcher_id'].astype(str) + '_' +
+             statcast_data['batter_id'].astype(str))
+            .factorize()[0] + 1
+    )
 
-    # Step 2: Create a count_state column
-    data['count_state'] = data['balls'].astype(str) + '-' + data['strikes'].astype(str)
+    # Step 5: Flip the sequence within each group while maintaining group order
+    statcast_data = statcast_data.groupby('group', group_keys=False).apply(lambda group: group.iloc[::-1])
 
-    # Step 3: Aggregate hitter performance by count
-    hitter_performance = data.groupby('count_state').agg(
-        BA=('launch_speed', lambda x: (x.notna().sum() / max(x.count(), 1))),  # Avoid division by zero
-        SLG=('launch_speed', lambda x: x.sum() / max(x.count(), 1)),  # Avoid division by zero
-        Whiff_Rate=('description', lambda x: (x == 'swinging_strike').sum() / max(x.count(), 1))  # Avoid division by zero
-    ).reset_index()
+    # Step 6: Add balls, strikes, and count columns
+    def calculate_count(group):
+        """Calculate running balls, strikes, and count for each group."""
+        balls, strikes = 0, 0
+        ball_strike_list = []
 
-    # Step 4: Aggregate pitcher performance by count and pitch type
-    pitcher_performance = data.groupby(['count_state', 'pitch_type']).agg(
-        Whiff_Rate=('description', lambda x: (x == 'swinging_strike').sum() / max(x.count(), 1)),  # Avoid division by zero
-        BAA=('events', lambda x: (x == 'hit_into_play').sum() / max(x.count(), 1))  # Avoid division by zero
-    ).reset_index()
+        for i, row in group.iterrows():
+            if 'ball' in row['description'].lower():
+                balls += 1
+            elif row['description'].lower() in ['swinging_strike', 'called_strike', 'foul']:
+                # Fouls only count as strikes if strikes < 2
+                if strikes < 2 or row['description'].lower() != 'foul':
+                    strikes += 1
 
-    # Step 5: Visualize pitch sequencing by count
-    print("Generating Pitch Sequencing Heatmap...")
-    if not pitcher_performance.empty:
-        sequence_pivot = pitcher_performance.pivot(index='count_state', columns='pitch_type', values='Whiff_Rate')
-        sns.heatmap(sequence_pivot, annot=True, cmap="Blues", fmt=".2f")
-        plt.title('Pitch Sequencing by Count (Whiff Rate)')
-        plt.xlabel('Pitch Type')
-        plt.ylabel('Count State')
-        plt.show()
-    else:
-        print("No data available for the selected pitcher.")
+            # Append the running count
+            ball_strike_list.append((balls, strikes))
 
-    # Step 6: Visualize hitter performance by count
-    print("Generating Hitter Performance Chart...")
-    if not hitter_performance.empty:
-        hitter_performance.plot(x='count_state', y=['BA', 'SLG', 'Whiff_Rate'], marker='o')
-        plt.title('Hitter Performance by Count')
-        plt.xlabel('Count State')
-        plt.ylabel('Metrics')
-        plt.legend(['BA', 'SLG', 'Whiff Rate'])
-        plt.grid()
-        plt.show()
-    else:
-        print("No data available for the selected batter.")
+        group['balls'] = [x[0] for x in ball_strike_list]
+        group['strikes'] = [x[1] for x in ball_strike_list]
+        group['count'] = [f"{x[0]}-{x[1]}" for x in ball_strike_list]
+        return group
 
-    # Return computed DataFrames for further use
-    return hitter_performance, pitcher_performance
+    # Apply count calculation to each group
+    statcast_data = statcast_data.groupby('group', group_keys=False).apply(calculate_count)
 
+    # Step 5: Save the adjusted DataFrame to a new CSV file
+    statcast_data.to_csv(file_path, index=False)
+    print(f"Sorted and adjusted data saved to {file_path}")
 
-# File path provided
-file_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/StatCast CSV Data/S3_Data/statcast_data_2024_09.csv"
+    return statcast_data
 
-# Example usage with specific batter and pitcher IDs
-specific_batter_id = "605400"  # Replace with the actual batter ID
-specific_pitcher_id = "518692"  # Replace with the actual pitcher ID
+# Directory containing the Statcast data files
+directory_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/StatCast CSV Data/S3_Data/"
 
-# Analyze the sample data
-hitter_perf_sample, pitcher_perf_sample = analyze_pitch_sequences_from_sample(
-    file_path,
-    batter_id=specific_batter_id,
-    pitcher_id=specific_pitcher_id
-)
+# Iterate over all files in the directory
+for filename in os.listdir(directory_path):
+    # Ensure we're only processing CSV files
+    if filename.endswith(".csv"):
+        file_path = os.path.join(directory_path, filename)
+        # Process and update the file in place
+        load_sort_flip_and_add_count_statcast_data_inplace(file_path)
+
+print("All files processed and updated.")

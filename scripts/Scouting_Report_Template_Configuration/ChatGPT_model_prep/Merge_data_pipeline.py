@@ -10,6 +10,16 @@ from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.hitter_se
 from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Hitter_Splits_Against_Arsenal_Data import generate_hitter_splits_against_arsenal_data
 from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Pitch_Arsenal_Data import generate_pitch_arsenal_data
 from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Pitcher_Heatmap_Data import generate_pitcher_hitter_heatmap_data
+from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Hitter_Sequence_Chart import (
+    generate_hitter_performance_chart,
+    convert_to_structured_data_hitter,
+    fetch_statcast_data,
+)
+from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Pitcher_Sequence_Splits import (
+    generate_pitcher_performance_chart,
+    convert_to_structured_data_pitcher,
+)
+
 
 class DecimalEncoder(JSONEncoder):
     def default(self, obj):
@@ -22,19 +32,14 @@ def merge_scouting_and_historical_data(
     pitcher_id,
     scouting_report_funcs,
     historical_data_path,
-    output_path
 ):
-    """
-    Merge scouting report data + historical data into one structure for a
-    given batter_id and pitcher_id. Returns the combined structure and writes
-    it to a JSON file for reference.
-    """
+
     # Initialize combined data
     combined_data = {
         "batter_id": batter_id,
         "pitcher_id": pitcher_id,
         "scouting_report": {},
-        "historical_data": {}
+        "historical_data": {},
     }
 
     # STEP 1: Fetch scouting report data in memory
@@ -70,24 +75,23 @@ def merge_scouting_and_historical_data(
         print(f"Error loading historical data: {e}")
         combined_data["historical_data"] = None
 
-    # STEP 3: Write combined_data to a JSON file
-    output_file = os.path.join(output_path, f"combined_data_{batter_id}_{pitcher_id}.json")
-    with open(output_file, "w") as f:
-        # Use custom encoder so Decimal objects don't break json.dump
-        json.dump(combined_data, f, indent=4, cls=DecimalEncoder)
-    print(f"Combined data saved to: {output_file}")
-
     # STEP 4: Return combined_data in memory (for direct usage in prompt generation)
     return combined_data
 
 
-# Corrected version of `scouting_report_funcs` using lambdas:
+# Updated scouting_report_funcs to include sequence data
 scouting_report_funcs = {
     "hitter_season_stats": lambda b, p: generate_hitter_season_stats_data(b),
     "pitcher_season_stats": lambda b, p: generate_pitcher_season_stats_data(p),
     "hitter_splits_against_arsenal": lambda b, p: generate_hitter_splits_against_arsenal_data(p, b),
     "pitcher_arsenal": lambda b, p: generate_pitch_arsenal_data(p),
-    "heatmap_data": lambda b, p: generate_pitcher_hitter_heatmap_data(p, b)
+    "heatmap_data": lambda b, p: generate_pitcher_hitter_heatmap_data(p, b),
+    "hitter_sequence_chart": lambda b, p: convert_to_structured_data_hitter(
+        generate_hitter_performance_chart(fetch_statcast_data(batter_id=b))
+    ),
+    "pitcher_sequence_splits": lambda b, p: convert_to_structured_data_pitcher(
+        generate_pitcher_performance_chart(fetch_statcast_data(pitcher_id=p))
+    ),
 }
 
 if __name__ == "__main__":
@@ -96,14 +100,11 @@ if __name__ == "__main__":
     pitcher_id = "605400"
 
     historical_data_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/StatCast CSV Data/Historical_Data_3Layers"
-    output_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/Combined_Data"
+
 
     combined_data = merge_scouting_and_historical_data(
         batter_id,
         pitcher_id,
         scouting_report_funcs,
         historical_data_path,
-        output_path
     )
-
-

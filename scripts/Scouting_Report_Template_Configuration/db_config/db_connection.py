@@ -22,3 +22,18 @@ def get_db_connection():
     except OperationalError as e:
         print(f"Error connecting to Supabase: {e}")
         return None
+
+
+import gc
+
+def clear_memory():
+    """
+    Clears memory and cache to reduce usage.
+    Works for general Python objects.
+    """
+    try:
+        # Clear the garbage collector
+        gc.collect()
+        print("Garbage collector cleared.")
+    except Exception as e:
+        print(f"An error occurred while clearing memory: {e}")
