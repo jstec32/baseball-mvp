@@ -101,6 +101,27 @@ def visualize_season_stats_table(data, key_mlbam):
     if not player_name:
         player_name = "Unknown Player"
 
+    highlight_columns = {}
+    if "ip" in data.columns:
+        highlight_columns["ip"] = data["ip"].idxmax()  # Most innings pitched
+    if "era" in data.columns:
+        highlight_columns["era"] = data["era"].idxmin()  # Lowest ERA
+    if "whip" in data.columns:
+        highlight_columns["whip"] = data["whip"].idxmin()  # Lowest WHIP
+    if "k_percentage" in data.columns:
+        highlight_columns["k_percentage"] = data["k_percentage"].idxmax()  # Highest K%
+    if "bb_percentage" in data.columns:
+        highlight_columns["bb_percentage"] = data["bb_percentage"].idxmin()  # Lowest BB%
+    if "hr_per_9" in data.columns:
+        highlight_columns["hr_per_9"] = data["hr_per_9"].idxmin()  # Lowest HR%
+
+    # Special handling for ld_percent, gb_percent, fb_percent
+    if all(col in data.columns for col in ["ld_percent", "gb_percent", "flyball_percent"]):
+        for idx, row in data.iterrows():
+            # Find the column with the lowest value in this row
+            highest_col = row[["ld_percent", "gb_percent", "flyball_percent"]].idxmax()
+            highlight_columns[(highest_col, idx)] = True  # Highlight the cell in this column for this row
+
     # Create the figure and table visualization
     fig, ax = plt.subplots(figsize=(8, len(data) * 0.6))  # Adjust height based on rows
     ax.axis('tight')
@@ -118,8 +139,24 @@ def visualize_season_stats_table(data, key_mlbam):
     table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
 
-    # Use the player's name in the title
 
+    # Apply highlights to the table
+    for key, value in highlight_columns.items():
+        if isinstance(key, tuple):
+            # Handle the (column, row) tuple case
+            col, idx = key
+            if col in data.columns:
+                col_index = list(data.columns).index(col)
+                cell = table[idx + 1, col_index]  # +1 because the header row is at index 0
+                cell.set_text_props(weight='bold', color='#FF0000')  # Highlight with bold and red color
+        else:
+            # Handle the single column case
+            col = key
+            idx = value
+            if col in data.columns:
+                col_index = list(data.columns).index(col)
+                cell = table[idx + 1, col_index]  # +1 because the header row is at index 0
+                cell.set_text_props(weight='bold', color='#FF0000')  # Highlight with bold and red color
 
     return fig
 
@@ -130,4 +167,7 @@ def generate_season_stats_viz(key_mlbam):
         print(f"No season stats available for key_mlbam: {key_mlbam}")
         return None
     fig = visualize_season_stats_table(season_stats_data, key_mlbam)
+    fig.show()
     return fig
+
+generate_season_stats_viz('605400')

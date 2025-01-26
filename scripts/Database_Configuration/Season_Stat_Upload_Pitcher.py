@@ -1,5 +1,5 @@
 import pandas as pd
-from pybaseball import pitching_stats
+from pybaseball import pitching_stats, pitching
 
 
 # Fetch pitching data for the seasons 2019–2023
@@ -46,7 +46,11 @@ def filter_columns(data):
         "CH%": "ch_percent",
         "CHv": "ch_velocity",
         "CB%": "cb_percent",
-        "CBv": "cb_velocity"
+        "CBv": "cb_velocity",
+        "LD%":"ld_percent",
+        "GB%":"gb_percent",
+        "FB%":"flyball_percent",
+        "HR/9":"hr_per_9"
     }
 
     # Filter the data
@@ -71,13 +75,13 @@ def save_to_csv(data, file_path):
 # Main function
 def main():
     # File path for CSV output
-    file_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/season_pitching_statistics.csv"
+    file_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/season_pitching_statistics_2024.csv"
 
     # Fetch pitching stats
-    pitching_data = fetch_pitching_stats(2019, 2023, qual=25)
+    pitching_data = fetch_pitching_stats(2024, 2024, qual=25)
 
     # Filter the data
-    #filtered_data = filter_columns(pitching_data)
+    pitching_data = filter_columns(pitching_data)
 
     # Save to CSV
     save_to_csv(pitching_data, file_path)

@@ -11,10 +11,10 @@ DB_CONFIG = {
 }
 
 # Path to your existing CSV file
-CSV_PATH = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/season_pitching_statistics.csv"
+CSV_PATH = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/season_pitching_statistics_2024.csv"
 
 # Path to save the updated CSV file
-OUTPUT_CSV_PATH = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/rowidseason_pitching_statistics.csv"
+OUTPUT_CSV_PATH = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/rowidseason_pitching_statistics_2024.csv"
 
 # Load the CSV into a DataFrame
 data = pd.read_csv(CSV_PATH)
@@ -65,7 +65,7 @@ def update_table(data):
 # Main function
 def main():
     # Path to the updated CSV file
-    CSV_PATH = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/rowidseason_pitching_statistics.csv"
+    CSV_PATH = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/rowidseason_pitching_statistics_2024.csv"
 
     # Load the CSV file into a Pandas DataFrame
     try:

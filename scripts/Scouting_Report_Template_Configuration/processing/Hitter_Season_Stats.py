@@ -82,7 +82,7 @@ def fetch_recent_hitter_stats_and_name(key_mlbam):
         return None, None
 
 # Visualize most recent hitter stats as a table
-def visualize_recent_hitter_stats_table(data, hitter_name, return_fig=False):
+def visualize_recent_hitter_stats_table(data, hitter_name, color_dict=None, table_width=8, max_rows=10, return_fig=False):
     apply_global_styles()
 
     # Format percentages
@@ -91,8 +91,9 @@ def visualize_recent_hitter_stats_table(data, hitter_name, return_fig=False):
         if column in data.columns:
             data[column] = (data[column] * 100).round(2)
 
-    # Create the figure
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fixed_width = 8  # Width in inches
+    fixed_height = 4  # Height in inches
+    fig, ax = plt.subplots(figsize=(fixed_width, fixed_height))
     ax.axis('off')
 
     # Create the table
@@ -105,8 +106,9 @@ def visualize_recent_hitter_stats_table(data, hitter_name, return_fig=False):
 
     # Style the table
     table.auto_set_font_size(False)
-
+    table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
+
 
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
 

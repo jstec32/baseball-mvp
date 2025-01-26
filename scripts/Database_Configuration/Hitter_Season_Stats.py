@@ -96,10 +96,10 @@ def insert_data_to_db(data):
 
 # Main function
 def main():
-    output_csv_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/hitter_season_statistics.csv"
+    output_csv_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/hitter_season_statistics_2024.csv"
 
     # Fetch data
-    hitter_data = fetch_hitter_stats(2020, 2023, qual=50)
+    hitter_data = fetch_hitter_stats(2024, 2024, qual=50)
 
     # Filter data
     filtered_data = filter_columns(hitter_data)

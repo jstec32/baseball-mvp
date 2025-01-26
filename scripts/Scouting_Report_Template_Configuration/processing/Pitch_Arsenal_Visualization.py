@@ -24,6 +24,7 @@ SELECT
     ROUND(CAST(SUM(CASE WHEN description = 'called_strike' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS NUMERIC), 2) AS strike_percent
 FROM pitch_data
 WHERE pitcher_id = %s
+    AND pitch_type IS NOT NULL
 GROUP BY pitch_type
 ORDER BY usage_percent DESC;
 """
@@ -52,11 +53,30 @@ def fetch_pitch_arsenal(pitcher_id):
         return None
 
 # Generate a bar chart for Usage Rate
-def plot_usage_rate(data, pitcher_id, return_fig=False):
+def plot_usage_rate(data, pitcher_id, color_dict,return_fig=False):
     apply_global_styles()
 
+    #Data validation
+    if data['pitch_type'].isnull().any():
+        print(f"Invalid data in 'pitch_type' column for pitcher_id: {pitcher_id}")
+        print(data[data['pitch_type'].isnull()])  # Print invalid rows
+        return None
+
+    if data['usage_percent'].isnull().any():
+        print(f"Invalid data in 'usage_percent' column for pitcher_id: {pitcher_id}")
+        print(data[data['usage_percent'].isnull()])  # Print invalid rows
+        return None
+
+    if data.empty:
+        print(f"No valid data to plot usage rate for pitcher_id: {pitcher_id}")
+        return None
+
+        # Clean data by removing invalid rows
+    data = data.dropna(subset=['pitch_type', 'usage_percent'])
+
+    bar_colors = [color_dict.get(pitch, "#B0BEC5") for pitch in data['pitch_type']]
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(data['pitch_type'], data['usage_percent'], color='skyblue')
+    ax.bar(data['pitch_type'], data['usage_percent'], color=bar_colors)
 
     # Add labels
     for i, value in enumerate(data['usage_percent']):
@@ -72,11 +92,16 @@ def plot_usage_rate(data, pitcher_id, return_fig=False):
     if return_fig:
         return fig
     else:
-        plt.show()
+        "No data to be displayed."
 
+#Helper function to convert HEX to RGB
+def hex_to_rgb(hex_color):
+
+    hex_color = hex_color.lstrip("#")
+    return tuple(int(hex_color[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
 
 # Generate a table for other stats
-def plot_pitch_arsenal_table(data, pitcher_id, return_fig=False):
+def plot_pitch_arsenal_table(data, pitcher_id, color_dict,return_fig=False):
     apply_global_styles()
 
     fig, ax = plt.subplots(figsize=(4, len(data) * 0.6))  # Adjust height based on rows
@@ -96,11 +121,18 @@ def plot_pitch_arsenal_table(data, pitcher_id, return_fig=False):
     table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
 
+    for i, row in enumerate(data.values):
+        pitch_type = row[0]  # Assuming the first column contains the pitch type
+        if pitch_type in color_dict:
+            rgb_color = hex_to_rgb(color_dict[pitch_type])  # Convert HEX to RGB
+            table[(i + 1, 0)].set_facecolor(rgb_color)  # Apply color to the cell
+            table[(i + 1, 0)].set_text_props(color="white")  # Ensure text contrast
+
 
     if return_fig:
         return fig
     else:
-        plt.show()
+        "No data."
 
 
 def generate_pitch_arsenal_visual(pitcher_id):
@@ -112,13 +144,24 @@ def generate_pitch_arsenal_visual(pitcher_id):
         print(f"No pitch arsenal data available for pitcher_id: {pitcher_id}")
         return None
 
+    print(f"Fetched {len(pitch_arsenal_data)} rows of pitch arsenal data for pitcher_id: {pitcher_id}") # Print the first few rows
+
     print(f"Fetched {len(pitch_arsenal_data)} rows of pitch arsenal data for pitcher_id: {pitcher_id}")
 
+    #colors dictionary
+    pitch_colours = {
+        "FF": "#FF007D", "FA": "#FF007D", "SI": "#98165D", "FC": "#BE5FA0",
+        "CH": "#F79E70", "FS": "#FE6100", "SC": "#F08223", "FO": "#FFB000",
+        "SL": "#67E18D", "ST": "#1BB999", "SV": "#376748", "KC": "#311D8B",
+        "CU": "#3025CE", "CS": "#274BFC", "EP": "#648FFF", "KN": "#867A08",
+        "PO": "#472C30", "UN": "#9C8975"
+    }
+
     # Generate usage rate figure
-    usage_rate_fig = plot_usage_rate(pitch_arsenal_data, pitcher_id, return_fig=True)
+    usage_rate_fig = plot_usage_rate(pitch_arsenal_data, pitcher_id, color_dict=pitch_colours, return_fig=True)
 
     # Generate pitch arsenal table figure
-    arsenal_table_fig = plot_pitch_arsenal_table(pitch_arsenal_data, pitcher_id, return_fig=True)
+    arsenal_table_fig = plot_pitch_arsenal_table(pitch_arsenal_data, pitcher_id, color_dict=pitch_colours, return_fig=True)
 
     return {"usage_rate": usage_rate_fig, "arsenal_table": arsenal_table_fig}
 

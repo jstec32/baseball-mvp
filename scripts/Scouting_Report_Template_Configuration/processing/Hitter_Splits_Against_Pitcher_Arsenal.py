@@ -73,10 +73,13 @@ def fetch_hitter_splits(pitcher_id, hitter_id):
     except Exception as e:
         print(f"Error fetching data: {e}")
         return None
+#Helper function to convert HEX to RGB
+def hex_to_rgb(hex_color):
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2],16) / 255.0 for i in (0, 2, 4))
 
 # Generate a table visualization
-def plot_hitter_splits_table(data, hitter_id, return_fig=False):
-
+def plot_hitter_splits_table(data, hitter_id, color_dict, return_fig=False):
     fig, ax = plt.subplots(figsize=(8, len(data) * 0.6))  # Adjust height based on rows
     ax.axis('tight')
     ax.axis('off')
@@ -94,7 +97,14 @@ def plot_hitter_splits_table(data, hitter_id, return_fig=False):
     table.set_fontsize(10)
     table.auto_set_column_width(col=list(range(len(data.columns))))
 
-
+    # Apply color coding to the Pitch Type column (assumed to be the first column)
+    for i, row in enumerate(data.values):
+        pitch_type = row[0]  # Assuming the first column contains the pitch type
+        if pitch_type in color_dict:
+            color_hex = color_dict[pitch_type]
+            rgb_color = hex_to_rgb(color_hex)  # Convert HEX to RGB
+            table[(i + 1, 0)].set_facecolor(rgb_color)  # Apply color to the cell
+            table[(i + 1, 0)].set_text_props(color="white")  # Ensure text contrast
 
     if return_fig:
         return fig
@@ -114,11 +124,19 @@ def generate_hitter_splits_visual(pitcher_id, hitter_id):
 
     print(f"Fetched {len(hitter_splits_data)} rows of hitter splits data for pitcher_id: {pitcher_id} and hitter_id: {hitter_id}")
 
+    pitch_colours = {
+        "FF": "#FF007D", "FA": "#FF007D", "SI": "#98165D", "FC": "#BE5FA0",
+        "CH": "#F79E70", "FS": "#FE6100", "SC": "#F08223", "FO": "#FFB000",
+        "SL": "#67E18D", "ST": "#1BB999", "SV": "#376748", "KC": "#311D8B",
+        "CU": "#3025CE", "CS": "#274BFC", "EP": "#648FFF", "KN": "#867A08",
+        "PO": "#472C30", "UN": "#9C8975"
+    }
     # Generate table figure
-    fig = plot_hitter_splits_table(hitter_splits_data, hitter_id, return_fig=True)
-
+    fig = plot_hitter_splits_table(hitter_splits_data, hitter_id, color_dict=pitch_colours, return_fig=True)
+    plt.show()
     return {"hitter_splits_table": fig}
 
+generate_hitter_splits_visual('605400','518692')
 
 
 

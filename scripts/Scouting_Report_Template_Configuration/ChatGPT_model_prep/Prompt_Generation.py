@@ -83,6 +83,7 @@ Generate Recommendations:
 2. Based on similar historical matchups how should the hitter approach this at-bat?
 3. When should the hitter be looking to swing, early in the count or late in the count based off of how the hitter & pitcher perform in counts?
 4. What zone could the hitter do the most damage on?
+5. What is a weakness of the pitcher that the hitter can look to exploit?
     """.strip()
 
     return prompt
