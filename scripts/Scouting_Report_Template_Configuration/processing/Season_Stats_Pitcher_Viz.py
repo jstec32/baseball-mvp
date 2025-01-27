@@ -169,5 +169,3 @@ def generate_season_stats_viz(key_mlbam):
     fig = visualize_season_stats_table(season_stats_data, key_mlbam)
     fig.show()
     return fig
-
-generate_season_stats_viz('605400')

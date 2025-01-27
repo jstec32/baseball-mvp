@@ -136,7 +136,5 @@ def generate_hitter_splits_visual(pitcher_id, hitter_id):
     plt.show()
     return {"hitter_splits_table": fig}
 
-generate_hitter_splits_visual('605400','518692')
-
 
 

@@ -5,6 +5,7 @@ from matplotlib.ticker import FuncFormatter
 
 from scripts.Database_Configuration.Hitter_Season_Stats import DB_CONFIG
 from scripts.Database_Configuration.visualization_config import  apply_global_styles
+from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Pitcher_Heatmap_Data import fetch_player_name
 
 SQL_QUERY_ROLLING_AVERAGES = """
 SELECT
@@ -95,38 +96,45 @@ def compute_rolling_averages_from_db(hitter_id, rolling_window=15):
 
     return daily_stats
 
-def plot_rolling_averages_from_db(daily_stats, hitter_name, return_fig=False):
-    plt.figure(figsize=(12, 6))
+def plot_rolling_averages_for_pdf(hitter_id, rolling_avg_data, return_fig=False):
 
-    # Plot rolling averages
-    plt.plot(daily_stats['game_date'], daily_stats['rolling_BA'], label="BA (Batting Avg)", color='blue', linewidth=2)
-    plt.plot(daily_stats['game_date'], daily_stats['rolling_OBP'], label="OBP (On-Base %)", color='green', linewidth=2)
-    plt.plot(daily_stats['game_date'], daily_stats['rolling_SLG'], label="SLG (Slugging %)", color='orange', linewidth=2)
+    # Fetch the player's name dynamically
+    player_name = fetch_player_name(hitter_id)
+    if not player_name:
+        player_name = "Unknown Player"
 
-    # Chart settings
-    plt.title(f"Rolling Averages for {hitter_name} (2024 Season)", fontsize=16, weight='bold')
-    plt.xlabel("Game Date", fontsize=12)
-    plt.ylabel("Rolling Averages", fontsize=12)
-    plt.legend(loc='upper left', fontsize=10)
-    plt.grid(alpha=0.3)
-    plt.tight_layout()
+    if rolling_avg_data is None or rolling_avg_data.empty:
+        print(f"No rolling average data available for hitter ID: {hitter_id}")
+        return None
 
-    # Set y-axis to three decimal places
-    ax = plt.gca()
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f'{x:.3f}'))
+    # Plot the rolling averages
+    fig, ax = plt.subplots(figsize=(10, 6))
+    stats_to_plot = ["rolling_BA", "rolling_OBP", "rolling_SLG", "rolling_OPS"]
+    labels = ["BA (Batting Average)", "OBP (On-Base Percentage)", "SLG (Slugging Percentage)", "OPS"]
+    colors = ["blue", "green", "orange", "red"]
 
-    # Additional chart settings
-    plt.grid(alpha=0.3)
+    for stat, label, color in zip(stats_to_plot, labels, colors):
+        if stat in rolling_avg_data.columns:
+            ax.plot(rolling_avg_data["game_date"], rolling_avg_data[stat], label=label, color=color, linewidth=2)
+
+    # Customize plot
+    ax.set_title(f"{player_name}'s Rolling Averages (2024 Season)", fontsize=16, weight="bold")
+    ax.set_xlabel("Game Date", fontsize=12)
+    ax.set_ylabel("Statistic Value", fontsize=12)
+    ax.legend(title="Metrics", fontsize=10)
+    ax.grid(axis="y", linestyle="--", alpha=0.7)
+
+    # Set x-axis date formatting
+    ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter("%b %d"))
+    plt.xticks(rotation=45)
+
+    # Format y-axis to show three decimal places
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.3f}"))
+
     plt.tight_layout()
 
     if return_fig:
-        return plt.gcf()
+        return plt.gcf()  # Return the figure for inclusion in the PDF
     else:
         plt.show()
 
-hitter_id = '518692'  # Replace with valid hitter ID
-rolling_stats = compute_rolling_averages_from_db(hitter_id)
-
-if rolling_stats is not None:
-    rolling_avg_fig = plot_rolling_averages_from_db(rolling_stats, hitter_name="Freddie Freeman", return_fig=True)
-    rolling_avg_fig.show()
