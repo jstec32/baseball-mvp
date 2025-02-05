@@ -1,4 +1,6 @@
 import os
+
+import joblib
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 
@@ -42,6 +44,22 @@ combined_data = pd.get_dummies(combined_data, columns=['count'], prefix='count',
 # Label encoding for pitch_type
 encoder = LabelEncoder()
 combined_data['pitch_type_encoded'] = encoder.fit_transform(combined_data['pitch_type'])
+
+# Save the encoder for future use
+joblib.dump(encoder, '/Users/joshsteckler/PycharmProjects/baseball-mvp/models/pitch_type_encoder.pkl')
+print("Pitch type encoder saved successfully.")
+
+pitch_type_mapping = {index: pitch for index, pitch in enumerate(encoder.classes_)}
+
+print("Pitch Type Mapping:")
+for key, value in pitch_type_mapping.items():
+    print(f"{key}: {value}")
+
+# Save the mapping to a CSV file
+mapping_df = pd.DataFrame(list(pitch_type_mapping.items()), columns=['Encoded Value', 'Pitch Type'])
+mapping_df.to_csv('/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/Pitch_Type_Mapping.csv', index=False)
+print("Mapping saved to: Pitch_Type_Mapping.csv")
+
 
 # Scale continuous features
 scaler = MinMaxScaler()
@@ -89,12 +107,18 @@ train_data, test_data = train_test_split(
     test_size=0.3,               # 30% test set
     shuffle=True,                # Shuffle to ensure unbiased splitting
     random_state=42,             # For reproducibility
-    stratify=combined_data['pitch_type_encoded']  # Maintain proportions of pitch types
+    stratify=filtered_data['pitch_type_encoded']  # Maintain proportions of pitch types
 )
 
-# Print the shapes of the datasets
-print(f"Training data shape: {train_data.shape}")
-print(f"Testing data shape: {test_data.shape}")
+# Verify proportions of pitch_type_encoded in train and test sets
+print("Original data distribution:")
+print(filtered_data['pitch_type_encoded'].value_counts(normalize=True))
+
+print("\nTraining data distribution:")
+print(train_data['pitch_type_encoded'].value_counts(normalize=True))
+
+print("\nTesting data distribution:")
+print(test_data['pitch_type_encoded'].value_counts(normalize=True))
 
 # Save datasets to CSV for reference
 train_data.to_csv('/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/Train_2024.csv', index=False)

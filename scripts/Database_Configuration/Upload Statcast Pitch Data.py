@@ -54,6 +54,10 @@ def process_statcast_data(data):
             "inning": "inning",
             "inning_topbot": "inning_topbot",
             "game_date": "game_date",
+            "on_3b":"on_3b",
+            "on_2b":"on_2b",
+            "on_1b":"on_1b",
+            "outs_when_up":"outs_when_up"
         })
 
         # Select only the columns required for the database
@@ -61,7 +65,7 @@ def process_statcast_data(data):
             "game_id", "game_date", "inning", "inning_topbot", "pitcher_id", "batter_id",
             "pitch_type", "release_speed", "release_spin_rate", "release_pos_x", "release_pos_y", "release_pos_z",
             "pfx_x", "pfx_z", "plate_x", "plate_z", "zone", "events", "description", "launch_speed",
-            "launch_angle", "hit_distance_sc", "effective_speed", "spin_axis", "stand", "p_throws"
+            "launch_angle", "hit_distance_sc", "effective_speed", "spin_axis", "stand", "p_throws", "on_3b","on_2b","on_1b","outs_when_up"
         ]
 
         # Remove duplicate columns and select relevant ones
@@ -115,8 +119,8 @@ def fetch_statcast_data_by_month(start_date, end_date):
             current_month = current_date.month
 
 # Specify the date range
-start_date = "2022-03-01"
-end_date = "2022-11-20"
+start_date = "2024-08-01"
+end_date = "2024-11-01"
 
 # Fetch and save data for each month in the range
 fetch_statcast_data_by_month(start_date, end_date)
