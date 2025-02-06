@@ -49,23 +49,34 @@ def player_suggestions():
 
 # API to generate scouting report
 @app.route('/generate_scouting_report', methods=['POST'])
+@app.route('/generate_scouting_report', methods=['POST'])
 def generate_scouting_report():
     try:
-        # Get hitter and pitcher IDs from the request
+        # Log incoming POST data for debugging
         data = request.json
-        hitter_id = data['hitter_id']
-        pitcher_id = data['pitcher_id']
+        print(f"Received POST data: {data}")
+
+        # Validate that hitter_id and pitcher_id exist in the request
+        if 'hitter_id' not in data or 'pitcher_id' not in data:
+            raise ValueError("Missing hitter_id or pitcher_id in POST request.")
+
+        hitter_id = str(data['hitter_id'])
+        pitcher_id = str(data['pitcher_id'])
+
+        # Log the fetched hitter_id and pitcher_id
+        print(f"Received hitter_id: {hitter_id}, pitcher_id: {pitcher_id}")
 
         # Run the PDF generation
-        pdf_path = run_pdf_generation(hitter_id, pitcher_id)
+        s3_url = run_pdf_generation(hitter_id, pitcher_id)
 
-        # Return the path of the generated PDF
-        if pdf_path and os.path.exists(pdf_path):
-            return jsonify({"pdf_path": pdf_path}), 200
+        # Return the download link
+        if s3_url:
+            return jsonify({"pdf_path": s3_url}), 200
         else:
             return jsonify({"error": "Failed to generate scouting report."}), 500
 
     except Exception as e:
+        print(f"Error generating scouting report: {e}")
         return jsonify({"error": str(e)}), 400
 
 
@@ -74,10 +85,49 @@ def generate_scouting_report():
 def download_scouting_report():
     pdf_path = request.args.get('pdf_path')
     if pdf_path and os.path.exists(pdf_path):
-        return send_file(pdf_path, as_attachment=True)
+        # Serve the file correctly as a PDF download
+        return send_file(
+            pdf_path,
+            as_attachment=True,
+            download_name=os.path.basename(pdf_path),  # Set a meaningful download name
+            mimetype='application/pdf'  # Ensure correct MIME type
+        )
     else:
         return jsonify({"error": "PDF not found"}), 404
 
+@app.route('/dashboard', methods=['GET'])
+def dashboard():
+    try:
+        # Connect to the database
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+
+        # Query for all saved reports
+        query = """
+        SELECT hitter_name, pitcher_name, pdf_path, created_at
+        FROM scouting_reports
+        ORDER BY created_at DESC;
+        """
+        cursor.execute(query)
+        reports = cursor.fetchall()
+
+        # Format the response as JSON
+        report_list = [
+            {
+                "hitter_name": row[0],
+                "pitcher_name": row[1],
+                "pdf_path": row[2],
+                "created_at": row[3].strftime("%Y-%m-%d %H:%M:%S")
+            } for row in reports
+        ]
+
+        cursor.close()
+        conn.close()
+        return jsonify(report_list)
+
+    except Exception as e:
+        print(f"Error fetching reports: {e}")
+        return jsonify({"error": "Failed to fetch reports"}), 500
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)

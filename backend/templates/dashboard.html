@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>User Dashboard</h1>
+    <div id="report-list"></div>
+
+    <script>
+        // Fetch and display previously generated reports
+        $(document).ready(function () {
+            $.ajax({
+                url: '/dashboard',
+                method: 'GET',
+                success: function (reports) {
+                    if (reports.length > 0) {
+                        let reportHtml = '<ul>';
+                        reports.forEach(report => {
+                            reportHtml += `
+                                <li>
+                                    <strong>${report.hitter_name} vs. ${report.pitcher_name}</strong>
+                                    <p>Generated on: ${report.created_at}</p>
+                                    <a href="${report.pdf_path}" target="_blank" download>Download Report</a>
+                                </li>
+                            `;
+                        });
+                        reportHtml += '</ul>';
+                        $('#report-list').html(reportHtml);
+                    } else {
+                        $('#report-list').html('<p>No scouting reports available.</p>');
+                    }
+                },
+                error: function () {
+                    $('#report-list').html('<p>Failed to load scouting reports.</p>');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

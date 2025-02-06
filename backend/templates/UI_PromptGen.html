@@ -1,0 +1,131 @@
+<!DOCTYPE h<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Scouting Report</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        #hitter-dropdown, #pitcher-dropdown {
+            border: 1px solid #ccc;
+            position: absolute;
+            background: white;
+            z-index: 999;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .suggestion {
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .suggestion:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Generate Scouting Report</h1>
+
+    <form id="scouting-form">
+        <label for="hitter-name">Select Hitter:</label>
+        <input type="text" id="hitter-name" placeholder="Start typing hitter name" autocomplete="off">
+        <div id="hitter-dropdown"></div>
+
+        <label for="pitcher-name">Select Pitcher:</label>
+        <input type="text" id="pitcher-name" placeholder="Start typing pitcher name" autocomplete="off">
+        <div id="pitcher-dropdown"></div>
+
+        <button type="submit">Generate Scouting Report</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+        $(document).ready(function () {
+            let selectedHitterId = null;
+            let selectedPitcherId = null;
+
+            // Function to populate dropdown with suggestions
+            function fetchPlayerSuggestions(inputField, dropdown, query) {
+                $.ajax({
+                    url: `/player_suggestions?query=${query}`,
+                    method: "GET",
+                    success: function (data) {
+                        dropdown.empty().show();
+                        data.forEach(player => {
+                            dropdown.append(`<div class="suggestion" data-id="${player.id}">${player.name}</div>`);
+                        });
+
+                        // Handle selection from suggestions
+                        $('.suggestion').on('click', function () {
+                            const playerId = $(this).data('id');
+                            const playerName = $(this).text();
+                            inputField.val(playerName);
+                            dropdown.hide();
+
+                            // Store the selected player ID
+                            if (inputField.attr('id') === 'hitter-name') {
+                                selectedHitterId = playerId;
+                            } else {
+                                selectedPitcherId = playerId;
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Listen for typing in hitter and pitcher input fields
+            $('#hitter-name').on('input', function () {
+                const query = $(this).val();
+                if (query.length >= 2) {
+                    fetchPlayerSuggestions($(this), $('#hitter-dropdown'), query);
+                } else {
+                    $('#hitter-dropdown').hide();
+                }
+            });
+
+            $('#pitcher-name').on('input', function () {
+                const query = $(this).val();
+                if (query.length >= 2) {
+                    fetchPlayerSuggestions($(this), $('#pitcher-dropdown'), query);
+                } else {
+                    $('#pitcher-dropdown').hide();
+                }
+            });
+
+            // Handle form submission
+            $('#scouting-form').on('submit', function (e) {
+                e.preventDefault();
+
+                if (!selectedHitterId || !selectedPitcherId) {
+                    $('#result').text('Please select both a hitter and pitcher.');
+                    return;
+                }
+
+                // Send POST request to generate scouting report
+                $.ajax({
+                    url: '/generate_scouting_report',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ hitter_id: selectedHitterId, pitcher_id: selectedPitcherId }),
+                    success: function (response) {
+                        $('#result').html(`
+                            <p>Scouting report generated successfully!</p>
+                            <a href="/download_scouting_report?pdf_path=${response.pdf_path}" target="_blank" download>
+                                Download Scouting Report
+                            </a>
+                        `);
+                    },
+                    error: function (xhr) {
+                        $('#result').text('Error generating scouting report: ' + xhr.responseText);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
+
