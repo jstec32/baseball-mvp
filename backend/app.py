@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, send_file, render_template
 from scripts.Scouting_Report_Template_Configuration.processing.Generate_PDF import run_pdf_generation
 import os
 import psycopg2
+import psycopg2.extras
 app = Flask(__name__)
 
 # Database configuration
@@ -104,7 +105,7 @@ def dashboard():
 
         # Query for all saved reports
         query = """
-        SELECT hitter_name, pitcher_name, pdf_path, created_at
+        SELECT report_id,hitter_name, pitcher_name, pdf_path, created_at
         FROM scouting_reports
         ORDER BY created_at DESC;
         """
@@ -114,10 +115,11 @@ def dashboard():
         # Format the response as JSON
         report_list = [
             {
-                "hitter_name": row[0],
-                "pitcher_name": row[1],
-                "pdf_path": row[2],
-                "created_at": row[3].strftime("%Y-%m-%d %H:%M:%S")
+                "report_id": row[0],
+                "hitter_name": row[1],
+                "pitcher_name": row[2],
+                "pdf_path": row[3],
+                "created_at": row[4].strftime("%Y-%m-%d %H:%M:%S")
             } for row in reports
         ]
 
@@ -128,6 +130,108 @@ def dashboard():
     except Exception as e:
         print(f"Error fetching reports: {e}")
         return jsonify({"error": "Failed to fetch reports"}), 500
+
+@app.route('/dashboard', methods=['GET'])
+def get_reports():
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+
+        # Query previously generated reports
+        query = """
+        SELECT hitter_name, pitcher_name, created_at, pdf_path
+        FROM scouting_reports
+        ORDER BY created_at DESC;
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        # Format the result as JSON
+        reports = [
+            {"hitter_name": row[0], "pitcher_name": row[1], "created_at": row[2], "pdf_path": row[3]}
+            for row in rows
+        ]
+        return jsonify(reports)
+
+    except Exception as e:
+        print(f"Error fetching scouting reports: {e}")
+        return jsonify({"error": "Failed to fetch reports"}), 500
+
+@app.route('/user_dashboard')
+def user_dashboard():
+    return render_template('dashboard.html')
+
+
+@app.route('/submit_feedback', methods=['POST'])
+def submit_feedback():
+    feedback_text = request.form.get('feedback')
+    feedback_type = request.form.get('feedback_type')
+    rating = int(request.form.get('rating'))
+    report_id = int(request.form.get('report_id'))
+    user_id = int(request.form.get('user_id'))
+
+    connection = None  # Ensure it's initialized before the try block
+    try:
+        # Connect to PostgreSQL database
+        connection = psycopg2.connect(
+            dbname="postgres",
+            user="postgres.chcovbrcpmlxyauansqe",
+            password="1Z4IO6fxxYw8PgxL",
+            host="aws-0-us-east-2.pooler.supabase.com",
+            port="5432"
+        )
+        cursor = connection.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        # Insert feedback into the table
+        insert_query = """
+        INSERT INTO feedback (report_id, user_id, feedback_text,feedback_type, rating)
+        VALUES (%s, %s, %s, %s, %s);
+        """
+        cursor.execute(insert_query, (report_id, user_id, feedback_text,feedback_type, rating))
+        connection.commit()
+
+        return jsonify({"message": "Feedback submitted successfully!"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        if connection is not None:  # Safeguard against uninitialized variable
+            connection.close()
+
+
+@app.route('/get_feedback/<int:report_id>', methods=['GET'])
+def get_feedback(report_id):
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+
+        # Query feedback for the selected report
+        query = """
+        SELECT feedback_text, rating, timestamp 
+        FROM feedback 
+        WHERE report_id = %s
+        ORDER BY timestamp DESC;
+        """
+        cursor.execute(query, (report_id,))
+        feedback = cursor.fetchall()
+
+        feedback_list = [
+            {
+                "feedback_text": row[0],
+                "rating": row[1],
+                "timestamp": row[2].strftime("%Y-%m-%d %H:%M:%S")
+            } for row in feedback
+        ]
+
+        cursor.close()
+        conn.close()
+        return jsonify(feedback_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)

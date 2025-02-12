@@ -5,40 +5,277 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Dashboard</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+        }
+
+        nav {
+            background-color: #007BFF;
+            padding: 10px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            padding: 0 10px;
+        }
+
+        nav a:hover {
+            text-decoration: underline;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: white;
+            box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+
+        select, button, textarea {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        a {
+            color: #007BFF;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .feedback-section {
+            display: none;
+        }
+    </style>
 </head>
 <body>
-    <h1>User Dashboard</h1>
-    <div id="report-list"></div>
+
+    <nav>
+        <a href="/user_dashboard">Dashboard</a> |
+        <a href="/">Generate New Report</a>
+    </nav>
+
+    <div class="container">
+        <h1>User Dashboard</h1>
+
+        <!-- Dropdown for reports -->
+        <label for="report-dropdown">Select a Scouting Report:</label>
+        <select id="report-dropdown">
+            <option value="">-- Select a Report --</option>
+        </select>
+
+        <!-- Download button -->
+        <button id="download-btn" disabled>Download Selected Report</button>
+
+        <!-- Feedback form section -->
+        <div id="feedback-form-section" style="display: none;">
+            <h3 id="report-details"></h3>
+            <form id="feedback-form">
+                <!-- New Dropdown for Feedback Category -->
+                <label for="feedback-type">Select Feedback Category:</label>
+                <select id="feedback-type" name="feedback_type" required>
+                    <option value="strengths_weaknesses">Strengths & Weaknesses</option>
+                    <option value="recommendations">Recommendations</option>
+                    <option value="missing_information">Missing Information</option>
+                </select>
+
+                <!-- Feedback Textarea -->
+                <label for="feedback">Leave your feedback:</label>
+                <textarea id="feedback" name="feedback" required placeholder="Provide your thoughts on the scouting report..."></textarea>
+
+                <label for="rating">Rate the report (1-5):</label>
+                <select id="rating" name="rating">
+                    <option value="1">1 - Poor</option>
+                    <option value="2">2 - Fair</option>
+                    <option value="3">3 - Good</option>
+                    <option value="4">4 - Very Good</option>
+                    <option value="5">5 - Excellent</option>
+                </select>
+
+                <input type="hidden" id="report-id" name="report_id">
+                <input type="hidden" id="user-id" name="user_id" value="123"> <!-- Example user_id -->
+
+                <button type="submit">Submit Feedback</button>
+            </form>
+
+            <div id="response-message"></div>
+        </div>
+
+        <!-- Separate section to display feedback dynamically -->
+        <div id="feedback-display-section">
+            <h3>Previous Feedback</h3>
+            <!-- Feedback content will be dynamically added here -->
+        </div>
+    </div>
+
 
     <script>
-        // Fetch and display previously generated reports
         $(document).ready(function () {
+    // Fetch the list of previously generated reports
             $.ajax({
                 url: '/dashboard',
                 method: 'GET',
                 success: function (reports) {
                     if (reports.length > 0) {
-                        let reportHtml = '<ul>';
+                        let optionsHtml = '<option disabled selected>Select a report</option>';
                         reports.forEach(report => {
-                            reportHtml += `
-                                <li>
-                                    <strong>${report.hitter_name} vs. ${report.pitcher_name}</strong>
-                                    <p>Generated on: ${report.created_at}</p>
-                                    <a href="${report.pdf_path}" target="_blank" download>Download Report</a>
-                                </li>
-                            `;
+                            optionsHtml += `
+                                <option value="${report.pdf_path}" data-hitter="${report.hitter_name}"
+                                        data-pitcher="${report.pitcher_name}" data-report-id="${report.report_id}">
+                                    ${report.hitter_name} vs. ${report.pitcher_name} (Generated on: ${new Date(report.created_at).toLocaleString()})
+                                </option>`;
                         });
-                        reportHtml += '</ul>';
-                        $('#report-list').html(reportHtml);
+                        $('#report-dropdown').html(optionsHtml);
                     } else {
-                        $('#report-list').html('<p>No scouting reports available.</p>');
+                        $('#report-dropdown').html('<option>No reports available</option>');
                     }
                 },
-                error: function () {
-                    $('#report-list').html('<p>Failed to load scouting reports.</p>');
+                error: function (xhr, status, error) {
+                    console.error("Failed to fetch reports:", status, error);
+                    alert('Failed to load scouting reports.');
+                }
+            });
+
+            // Enable download button and display feedback form when a report is selected
+            $('#report-dropdown').on('change', function () {
+                const selectedOption = $(this).find(':selected');
+                const selectedReport = selectedOption.val();
+                const hitter = selectedOption.data('hitter');
+                const pitcher = selectedOption.data('pitcher');
+                const reportId = selectedOption.data('report-id');
+
+                $('#download-btn').prop('disabled', !selectedReport);
+
+                if (selectedReport && reportId) {
+                    $('#report-details').text(`Feedback for: ${hitter} vs. ${pitcher}`);
+                    $('#report-id').val(reportId);
+                    $('#feedback-form-section').show();  // Show feedback form
+
+                    // Clear previous feedback (but not the form)
+                    $('#feedback-display-section').empty();
+
+                    // Fetch and display feedback for the selected report
+                    $.ajax({
+                        url: `/get_feedback/${reportId}`,
+                        method: 'GET',
+                        success: function (feedback) {
+                            let feedbackHtml = '<h3>Previous Feedback</h3>';
+                            if (feedback.length > 0) {
+                                feedback.forEach(item => {
+                                    feedbackHtml += `
+                                        <div class="feedback-item">
+                                            <p><strong>Rating:</strong> ${item.rating}/5</p>
+                                            <p>${item.feedback_text}</p>
+                                            <p><em>Submitted on: ${item.timestamp}</em></p>
+                                        </div><hr>`;
+                                });
+                            } else {
+                                feedbackHtml += '<p>No feedback available for this report.</p>';
+                            }
+                            $('#feedback-display-section').html(feedbackHtml);
+                        },
+                        error: function (xhr, status, error) {
+                            console.error("Failed to fetch feedback:", error);
+                            $('#feedback-display-section').html('<p>Error loading feedback.</p>');
+                        }
+                    });
+                } else {
+                    $('#feedback-form-section').hide();
+                }
+            });
+
+            // Handle feedback form submission
+            $('#feedback-form').on('submit', function (event) {
+                event.preventDefault();  // Prevent default form submission
+
+                const formData = new FormData(this);
+
+                // Send POST request to backend
+                $.ajax({
+                    url: '/submit_feedback',
+                    method: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function (response) {
+                        $('#response-message').html(`<p style="color: green;">${response.message}</p>`);
+                        $('#feedback-form')[0].reset();  // Clear form after successful submission
+
+                        // Reload feedback to display the newly added feedback
+                        const reportId = $('#report-id').val();
+                        $('#feedback-display-section').empty();
+                        fetchFeedback(reportId);
+                    },
+                    error: function (xhr, status, error) {
+                        $('#response-message').html(`<p style="color: red;">Error: ${xhr.responseJSON.error}</p>`);
+                    }
+                });
+            });
+
+            // Fetch feedback function to be called on form submission or dropdown change
+            function fetchFeedback(reportId) {
+                $.ajax({
+                    url: `/get_feedback/${reportId}`,
+                    method: 'GET',
+                    success: function (feedback) {
+                        let feedbackHtml = '<h3>Previous Feedback</h3>';
+                        if (feedback.length > 0) {
+                            feedback.forEach(item => {
+                                feedbackHtml += `
+                                    <div class="feedback-item">
+                                        <p><strong>Rating:</strong> ${item.rating}/5</p>
+                                        <p>${item.feedback_text}</p>
+                                        <p><em>Submitted on: ${item.timestamp}</em></p>
+                                    </div><hr>`;
+                            });
+                        } else {
+                            feedbackHtml += '<p>No feedback available for this report.</p>';
+                        }
+                        $('#feedback-display-section').html(feedbackHtml);
+                    },
+                    error: function (xhr, status, error) {
+                        console.error("Failed to fetch feedback:", error);
+                        $('#feedback-display-section').html('<p>Error loading feedback.</p>');
+                    }
+                });
+            }
+
+            // Handle report download
+            $('#download-btn').on('click', function () {
+                const selectedReport = $('#report-dropdown').val();
+                if (selectedReport) {
+                    window.open(selectedReport, '_blank');
                 }
             });
         });
     </script>
+
 </body>
 </html>
