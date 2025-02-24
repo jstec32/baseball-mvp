@@ -1,7 +1,10 @@
+import os
+
 import psycopg2
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from dotenv import load_dotenv
 from matplotlib.patches import Rectangle
 from scripts.Database_Configuration.visualization_config import  apply_global_styles
 
@@ -29,7 +32,7 @@ def fetch_player_name(player_id):
         return None
 
 
-
+load_dotenv()
 # Database connection function
 def get_db_connection():
     """
@@ -37,11 +40,11 @@ def get_db_connection():
     """
     try:
         conn = psycopg2.connect(
-            host="aws-0-us-east-2.pooler.supabase.com",
-            database="postgres",
-            user="postgres.chcovbrcpmlxyauansqe",
-            password="1Z4IO6fxxYw8PgxL",  # Replace with your Supabase password
-            port=5432
+            host=os.getenv("DB_HOST"),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            port=os.getenv("DB_PORT")
         )
         print("Connected to Supabase PostgreSQL database successfully!")
         return conn

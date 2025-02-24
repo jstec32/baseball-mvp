@@ -2,16 +2,21 @@ import pandas as pd
 import psycopg2
 import seaborn as sns
 import matplotlib.pyplot as plt
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from scripts.Scouting_Report_Template_Configuration.db_config.db_connection import clear_memory
 
 # Database connection details
-db_config = {
-    "host": "aws-0-us-east-2.pooler.supabase.com",
-    "database": "postgres",
-    "user": "postgres.chcovbrcpmlxyauansqe",
-    "password": "1Z4IO6fxxYw8PgxL",
-    "port": 5432,
+import os
+load_dotenv()
+
+# Database configuration
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST"),
+    "database": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "port": int(os.getenv("DB_PORT", 5432))  # Default port 5432 if not set
 }
 
 

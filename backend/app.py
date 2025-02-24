@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file, render_template
 from scripts.Scouting_Report_Template_Configuration.processing.Generate_PDF import run_pdf_generation
 import os
@@ -6,12 +7,16 @@ import psycopg2.extras
 app = Flask(__name__)
 
 # Database configuration
+import os
+load_dotenv()
+
+# Database configuration
 DB_CONFIG = {
-    "host": "aws-0-us-east-2.pooler.supabase.com",
-    "database": "postgres",
-    "user": "postgres.chcovbrcpmlxyauansqe",
-    "password": "1Z4IO6fxxYw8PgxL",  # Replace with your Supabase password
-    "port": 5432  # Default PostgreSQL port
+    "host": os.getenv("DB_HOST"),
+    "database": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "port": int(os.getenv("DB_PORT", 5432))  # Default port 5432 if not set
 }
 # Serve the UI
 @app.route('/')
@@ -174,13 +179,12 @@ def submit_feedback():
 
     connection = None  # Ensure it's initialized before the try block
     try:
-        # Connect to PostgreSQL database
-        connection = psycopg2.connect(
-            dbname="postgres",
-            user="postgres.chcovbrcpmlxyauansqe",
-            password="1Z4IO6fxxYw8PgxL",
-            host="aws-0-us-east-2.pooler.supabase.com",
-            port="5432"
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST"),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            port=os.getenv("DB_PORT")
         )
         cursor = connection.cursor(cursor_factory=psycopg2.extras.DictCursor)
 

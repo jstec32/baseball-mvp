@@ -5,7 +5,7 @@ import psycopg2
 mlb_teams = [
      "ARI"
 ]
-
+#IF USED AGAIN, WILL NEED TO REPLACE CONNECTION
 def populate_games_table(conn, df):
 
     insert_query = """
@@ -54,13 +54,6 @@ def populate_games_table(conn, df):
 
 def main():
 
-    conn = psycopg2.connect(
-        host = "aws-0-us-east-2.pooler.supabase.com",
-        database = "postgres",
-        user = "postgres.chcovbrcpmlxyauansqe",
-        password = "1Z4IO6fxxYw8PgxL",  # Replace with your Supabase password
-        port = 5432  # Default PostgreSQL port)
-    )
 
     raw_games_df = gather_games_data(mlb_teams, 2021, 2021)
     transformed_df = transform_games_data(raw_games_df)
