@@ -172,3 +172,6 @@ cython_debug/
 *.csv
 data/
 StatCast CSV Data/
+docs/*.csv
+models/*.pkl
+StatCast CSV Data/
