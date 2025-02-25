@@ -176,3 +176,4 @@ StatCast CSV Data/
 docs/*.csv
 models/*.pkl
 StatCast CSV Data/
+.env
