@@ -6,18 +6,28 @@ from matplotlib.patches import Rectangle
 
 from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Pitcher_Heatmap_Data import get_db_connection
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import numpy as np
+from matplotlib.patches import Rectangle
+import seaborn as sns
+import matplotlib.patches as mpatches
 
-# Fetch hitter data for heatmap visualization
-def fetch_hitter_data_with_is_hit(hitter_id):
+# Fetch hitter data for heatmap visualization (including all pitches)
+def fetch_hitter_data_with_pitches(hitter_id):
     """
-    Fetch batted ball data for a specific hitter with positive outcomes.
+    Fetch batted ball data for a specific hitter, including all pitch locations.
     """
     query = f"""
     SELECT 
+        pd.game_id,
         pd.zone,
         pd.plate_x,
         pd.plate_z,
         pd.pitch_type,
+        pd.description,
+        pd.events,
         CASE 
             WHEN pd.events IN ('single', 'double', 'triple', 'home_run') THEN TRUE 
             ELSE FALSE 
@@ -42,49 +52,142 @@ def fetch_hitter_data_with_is_hit(hitter_id):
     finally:
         connection.close()
 
+def draw_sz(sz_top=3.5, sz_bot=1.5, ls='k-'):
+    plt.plot([-0.708, 0.708], [sz_bot, sz_bot], ls)
+    plt.plot([-0.708, -0.708], [sz_bot, sz_top], ls)
+    plt.plot([0.708, 0.708], [sz_bot, sz_top], ls)
+    plt.plot([-0.708, 0.708], [sz_top, sz_top], ls)
 
-def add_zones_to_strike_zone(ax):
-    """
-    Overlay numbered zones onto the strike zone.
-    """
-    zones = [
-        (-0.71, 2.5, 0.47, 1.0, '1'), ( -0.24, 2.5, 0.47, 1.0, '2'), ( 0.23, 2.5, 0.47, 1.0, '3'),
-        (-0.71, 1.5, 0.47, 1.0, '4'), ( -0.24, 1.5, 0.47, 1.0, '5'), ( 0.23, 1.5, 0.47, 1.0, '6'),
-        (-0.71, 0.5, 0.47, 1.0, '7'), ( -0.24, 0.5, 0.47, 1.0, '8'), ( 0.23, 0.5, 0.47, 1.0, '9'),
-    ]
+def draw_home_plate(catcher_perspective=True, ls='k-'):
+    if catcher_perspective:
+        plt.plot([-0.708, 0.708], [0, 0], ls)
+        plt.plot([-0.708, -0.708], [0, -0.3], ls)
+        plt.plot([0.708, 0.708], [0, -0.3], ls)
+        plt.plot([-0.708, 0], [-0.3, -0.6], ls)
+        plt.plot([0.708, 0], [-0.3, -0.6], ls)
+    else:
+        plt.plot([-0.708, 0.708], [0, 0], ls)
+        plt.plot([-0.708, -0.708], [0, 0.1], ls)
+        plt.plot([0.708, 0.708], [0, 0.1], ls)
+        plt.plot([-0.708, 0], [0.1, 0.3], ls)
+        plt.plot([0.708, 0], [0.1, 0.3], ls)
 
-    for x, y, width, height, label in zones:
-        ax.add_patch(Rectangle((x, y), width, height, fill=False, edgecolor='black', linewidth=1))
-        ax.text(x + width / 2, y + height / 2, label, ha='center', va='center', fontsize=8, color='black')
+def draw_attack_zones():
+    plt.plot([-0.558, 0.558], [1.833, 1.833], color=(227/255, 150/255, 255/255), ls='-', lw=3)
+    plt.plot([-0.558, -0.558], [1.833, 3.166], color=(227/255, 150/255, 255/255), ls='-', lw=3)
+    plt.plot([0.558, 0.558], [1.833, 3.166], color=(227/255, 150/255, 255/255), ls='-', lw=3)
+    plt.plot([-0.558, 0.558], [3.166, 3.166], color=(227/255, 150/255, 255/255), ls='-', lw=3)
+
+    plt.plot([-1.108, 1.108], [1.166, 1.166], color=(255/255, 197/255, 150/255), ls='-', lw=3)
+    plt.plot([-1.108, -1.108], [1.166, 3.833], color=(255/255, 197/255, 150/255), ls='-', lw=3)
+    plt.plot([1.108, 1.108], [1.166, 3.833], color=(255/255, 197/255, 150/255), ls='-', lw=3)
+    plt.plot([-1.108, 1.108], [3.833, 3.833], color=(255/255, 197/255, 150/255), ls='-', lw=3)
+
+    plt.plot([-1.666, 1.666], [0.5, 0.5], color=(209/255, 209/255, 209/255), ls='-', lw=3)
+    plt.plot([-1.666, -1.666], [0.5, 4.5], color=(209/255, 209/255, 209/255), ls='-', lw=3)
+    plt.plot([1.666, 1.666], [0.5, 4.5], color=(209/255, 209/255, 209/255), ls='-', lw=3)
+    plt.plot([-1.666, 1.666], [4.5, 4.5], color=(209/255, 209/255, 209/255), ls='-', lw=3)
 
 
-def generate_hitter_heatmap(hitter_id, hitter_name):
 
-    # Fetch hitter data
-    hitter_data = fetch_hitter_data_with_is_hit(hitter_id)
+# Generate hitter heatmap with pitch overlays
+def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
+
+
+    # Fetch **all** data for an accurate heatmap
+    hitter_data = fetch_hitter_data_with_pitches(hitter_id)
 
     if hitter_data is None or hitter_data.empty:
         print(f"No hitter data available for {hitter_name}.")
         return None
 
     hitter_data = hitter_data.dropna(subset=["plate_x", "plate_z"])
-
+    hitter_data['plot_event'] = hitter_data['events'].fillna(hitter_data['description'])
     if hitter_data.empty:
         print(f"No valid data for hitter {hitter_name}.")
         return None
 
-    # Normalize hit weights for KDE plot
+    # Normalize hit weights for KDE plot (use full data)
     weights = hitter_data['is_hit'].astype(int)
     if weights.sum() > 0:
         weights = weights / weights.sum()
     else:
         print(f"No hits found for {hitter_name}, skipping heatmap generation.")
         return None
+    print(hitter_data)
+    print(game_id)
+    # **Filter pitch locations for only the selected game**
+    game_pitches = hitter_data[hitter_data["game_id"] == game_id]
+    print(game_pitches)
+    EVENT_COLORS = {
+        'single': 'limegreen',
+        'double': 'dodgerblue',
+        'triple': 'orange',
+        'home_run': 'red',
+        'called_strike': 'black',
+        'swinging_strike': 'darkred',
+        'foul': 'gray',
+        'ball': 'skyblue',
+        'hit_by_pitch': 'pink',
+        'intent_ball': 'mediumorchid',
+        'foul_tip': 'darkorange',
+        'bunt_foul': 'gold',
+        'missed_bunt': 'darkgoldenrod',
+        'foul_bunt': 'burlywood',
+        'pitchout': 'navy',
+        'caught_stealing_2b': 'slategray',
+        'caught_stealing_3b': 'teal',
+        'caught_stealing_home': 'darkcyan',
+        'pickoff_1b': 'mediumseagreen',
+        'pickoff_2b': 'seagreen',
+        'pickoff_3b': 'mediumaquamarine',
+        'balk': 'indianred',
+        'wild_pitch': 'tomato',
+        'passed_ball': 'rosybrown',
+        'other_out': 'dimgray',
+        'strikeout': 'crimson',
+        'strikeout_double_play': 'maroon',
+        'grounded_into_double_play': 'chocolate',
+        'force_out': 'darkkhaki',
+        'fielders_choice': 'tan',
+        'field_error': 'lightcoral',
+        'sac_bunt': 'darkslategray',
+        'sac_fly': 'lightseagreen',
+        'runner_advance': 'darkturquoise',
+        'runner_double_play': 'cadetblue',
+        'interference': 'mediumvioletred',
+        'fan_interference': 'purple',
+        'field_interference': 'plum',
+        'game_advisory': 'lightsteelblue',
+        'game_delay': 'lavender',
+        'ejection': 'firebrick',
+        'review': 'darkslateblue',
+        'manager_challenge': 'rebeccapurple',
+        'umpire_challenge': 'mediumslateblue',
+        'runner_challenge': 'slateblue',
+        'batter_challenge': 'blueviolet',
+        'pitching_substitution': 'darkgreen',
+        'defensive_substitution': 'forestgreen',
+        'offensive_substitution': 'mediumspringgreen',
+        'injury': 'lightpink',
+        'inning_break': 'silver'
+    }
+    fallback_colors = sns.color_palette("husl", 50).as_hex()
+    unique_plot_events = hitter_data["plot_event"].unique()
+    event_color_map = {}
+    for idx, event in enumerate(unique_plot_events):
+        if event in EVENT_COLORS:
+            event_color_map[event] = EVENT_COLORS[event]
+        else:
+            # Assign unused fallback color, cycling if necessary
+            event_color_map[event] = fallback_colors[idx % len(fallback_colors)]
+
 
     # Create figure
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(4, 4))
 
-    # Plot KDE heatmap for hitter success
+
+    # Plot KDE heatmap using all available data
     try:
         sns.kdeplot(
             x=hitter_data['plate_x'],
@@ -99,24 +202,66 @@ def generate_hitter_heatmap(hitter_id, hitter_name):
         print(f"Error generating hitter heatmap: {e}")
         return None
 
-    # Add zones
-    add_zones_to_strike_zone(ax)
+    # Separate hits & misses for the selected game
+    hit_data = game_pitches[game_pitches["is_hit"]]
+    miss_data = game_pitches[~game_pitches["is_hit"]]
+
+    # Plot all game pitches (colored by plot_event)
+    for event, color in event_color_map.items():
+        event_data = game_pitches[game_pitches["plot_event"] == event]
+        ax.scatter(
+            event_data['plate_x'],
+            event_data['plate_z'],
+            color=color,
+            edgecolors="black",
+            linewidth=0.6,
+            s=70,
+            alpha=0.85,
+            label=event  # Each pitch type could appear in the legend
+        )
+
+    # --- New Section ---
+    # Draw the home plate, strike zone, and attack zones
+    draw_home_plate()
+    draw_sz()
+
+    # -------------------
 
     # Formatting
     ax.set_xlim(-2.0, 2.0)
-    ax.set_ylim(0.0, 5.0)
-    ax.set_title(f"Hitter Heatmap - {hitter_name}", fontsize=14)
+    ax.set_ylim(-1.0, 5.0)
+
+    ax.set_title(f"Hitter Heatmap - {hitter_name} (Game {game_id})", fontsize=6)
 
     ax.set_xticks([])  # Hide x-axis ticks
     ax.set_yticks([])  # Hide y-axis ticks
     ax.set_xlabel("")
     ax.set_ylabel("")
-    ax.set_frame_on(False)  # **Removes the frame**
-    ax.axis('off')  # **Completely removes axis visuals**
+    ax.set_frame_on(False)  # Removes the frame
+    ax.axis('off')  # Completely removes axis visuals
 
-    print(f" Hitter heatmap generated for {hitter_name}.")
+    # Build dynamic legend - only show events that actually appeared in the game
+    unique_events_in_game = game_pitches["plot_event"].unique()
+    legend_patches = [
+        mpatches.Patch(color=event_color_map[event], label=event.replace("_", " ").title())
+        for event in unique_events_in_game
+    ]
+
+    # Place legend inside plot (bottom-right)
+    ax.legend(
+        handles=legend_patches,
+        title="Event Legend",
+        loc='lower right',
+        fontsize=6,
+        frameon=True,
+        ncol=1,
+        bbox_to_anchor=(1.15, 0)
+    )
+    plt.subplots_adjust(left=0.15, right=0.85, top=0.85, bottom=0.15)
+
+    print(f"Hitter heatmap generated for {hitter_name} in Game {game_id}.")
     plt.show()
     return fig
 
-generate_hitter_heatmap("621566", "Matt Olson")
-
+# Example Usage
+generate_hitter_heatmap("621566", "Matt Olson","747121")

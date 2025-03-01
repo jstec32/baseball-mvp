@@ -1,12 +1,25 @@
 import os
+from io import StringIO
+
 import pandas as pd
 import psycopg2
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
-from pybaseball import statcast_single_game, spraychart
+from pybaseball import statcast_single_game
 from scripts.Hitter_Report_Card.Data_Config.Spraychart_dev import spraychart_final
+import boto3
 # Load .env file
 load_dotenv()  # Ensure environment variables are loaded correctly
+
+# AWS Configuration
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION")
+# S3 Bucket Variables
+SCOUTING_REPORTS_S3_BUCKET = os.getenv("SCOUTING_REPORTS_S3_BUCKET")
+MODEL_TRAINING_S3_BUCKET = os.getenv("MODEL_TRAINING_S3_BUCKET")
+STATCAST_S3_BUCKET = os.getenv("STATCAST_S3_BUCKET")  # Now using a separate bucket for Statcast
+STATCAST_S3_PATH = os.getenv("STATCAST_S3_PATH")
 
 # Database Configuration
 DB_CONFIG = {
@@ -17,29 +30,69 @@ DB_CONFIG = {
     "port": int(os.getenv("DB_PORT", 5432))  # Default port 5432 if not set
 }
 
-# Define directory for Statcast data
-directory_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/StatCast CSV Data/S3_Data/"
+# Initialize S3 Client
+s3_client = boto3.client(
+    's3',
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY,
+    region_name=AWS_REGION
+)
+
 
 # User input: Filter based on game_date & batter_id
 game_date = "2024-10-01"  # Example game date
 batter_id = 624585  # Example player ID (Julio Rodríguez)
 
-###  Load Statcast Data for `game_date` & `batter_id`**
-statcast_data = []
-for file in os.listdir(directory_path):
-    if file.endswith(".csv") and "2024" in file:
-        file_path = os.path.join(directory_path, file)
-        df = pd.read_csv(file_path)
-        df = df[(df["game_date"] == game_date) & (df["batter_id"] == batter_id)]  # Filter only relevant game data
-        if not df.empty:
-            statcast_data.append(df)
 
-if statcast_data:
-    statcast_data = pd.concat(statcast_data, ignore_index=True)
-    print(f" Loaded {len(statcast_data)} rows for game_date {game_date} & batter_id {batter_id}.")
+def load_statcast_data_from_s3():
+    """ Fetches all Statcast 2024 monthly files from S3 and loads them into a Pandas DataFrame """
+    statcast_data = []
+
+    try:
+        # Get all objects in the S3 bucket
+        response = s3_client.list_objects_v2(Bucket=STATCAST_S3_BUCKET)
+
+        if "Contents" not in response:
+            print("No Statcast data found in S3.")
+            return pd.DataFrame()
+
+        # Iterate through all objects and filter only 2024 CSV files
+        for obj in response["Contents"]:
+            file_key = obj["Key"]
+
+            # Ensure it's a file (not a folder) and follows the `statcast_data_2024_XX.csv` pattern
+            if file_key.endswith(".csv") and "docs/StatCast CSV Data/S3_Data/statcast_data_2024_" in file_key:
+                print(f"Fetching file: {file_key} from {STATCAST_S3_BUCKET}...")
+
+                # Read file from S3
+                s3_object = s3_client.get_object(Bucket=STATCAST_S3_BUCKET, Key=file_key)
+                csv_data = s3_object["Body"].read().decode("utf-8")
+
+                # Convert to DataFrame
+                df = pd.read_csv(StringIO(csv_data))
+
+                # Filter only relevant game data
+                df = df[(df["game_date"] == game_date) & (df["batter_id"] == batter_id)]
+
+                if not df.empty:
+                    statcast_data.append(df)
+
+    except Exception as e:
+        print(f"Error retrieving data from S3: {e}")
+        return pd.DataFrame()
+
+    # Combine all months into a single DataFrame
+    return pd.concat(statcast_data, ignore_index=True) if statcast_data else pd.DataFrame()
+
+
+# Load Statcast Data from S3
+statcast_data = load_statcast_data_from_s3()
+
+if not statcast_data.empty:
+    print(f"Loaded {len(statcast_data)} rows for game_date {game_date} & batter_id {batter_id}.")
 else:
-    print(f" No statcast data found for game_date {game_date} & batter_id {batter_id}.")
-    exit()  # Stop execution if no data is found
+    print(f"No statcast data found for game_date {game_date} & batter_id {batter_id}.")
+    exit()
 
 ### Retrieve `home_team` and `away_team` Using `game_id`**
 sample_game_ids = statcast_data["game_id"].unique()  # Get unique game_ids
