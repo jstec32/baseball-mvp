@@ -2,7 +2,11 @@ import boto3
 import pandas as pd
 import os
 from io import StringIO
-
+import requests
+from io import BytesIO
+from PIL import Image
+import matplotlib.pyplot as plt
+import pandas as pd
 import requests
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Pitcher_Heatmap_Data import get_db_connection
@@ -12,6 +16,39 @@ AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_BUCKET_NAME = "baseball-data-mvp"
 MLB_GAME_DATA_PATH = "mlb_game_data/mlb_game_data.csv"  # Adjust path if needed
+
+TEAM_COLORS = {
+    "Chicago White Sox": "#27251F",
+    "Detroit Tigers": "#0C2340",
+    "Kansas City Royals": "#004687",
+    "Minnesota Twins": "#002B5C",
+    "Cleveland Guardians": "#0C2340",
+    "Baltimore Orioles": "#DF4601",
+    "Boston Red Sox": "#BD3039",
+    "New York Yankees": "#003087",
+    "Tampa Bay Rays": "#092C5C",
+    "Toronto Blue Jays": "#134A8E",
+    "Houston Astros": "#002D62",
+    "Los Angeles Angels": "#BA0021",
+    "Oakland Athletics": "#003831",
+    "Seattle Mariners": "#0C2C56",
+    "Texas Rangers": "#003278",
+    "Chicago Cubs": "#0E3386",
+    "Cincinnati Reds": "#C6011F",
+    "Milwaukee Brewers": "#FFC52F",
+    "Pittsburgh Pirates": "#27251F",
+    "St. Louis Cardinals": "#C41E3A",
+    "Atlanta Braves": "#CE1141",
+    "Miami Marlins": "#00A3E0",
+    "New York Mets": "#002D72",
+    "Philadelphia Phillies": "#E81828",
+    "Washington Nationals": "#AB0003",
+    "Arizona Diamondbacks": "#A71930",
+    "Colorado Rockies": "#33006F",
+    "Los Angeles Dodgers": "#005A9C",
+    "San Diego Padres": "#2F241D",
+    "San Francisco Giants": "#FD5A1E"
+}
 
 
 def read_mlb_game_data_from_s3():
@@ -42,10 +79,11 @@ def fetch_player_id(batter_name, game_id, mlb_game_data):
     try:
         # Filter the game data for the specific game_id
         game_data_filtered = mlb_game_data[mlb_game_data["game_id"] == int(game_id)]
-
+        print(batter_name)
+        print(game_id)
         # Ensure at least one game match exists
         if game_data_filtered.empty:
-            print(f"⚠ No game data found for game_id: {game_id}")
+            print(f" No game data found for game_id: {game_id}")
             return None
 
         # Fetch player ID from the database using name + game_id
@@ -93,25 +131,35 @@ def fetch_player_headshot(hitter_id):
         return None
 
 def fetch_critical_moments(game_id, mlb_game_data):
-
-    query = f"""
-    SELECT 
-    players."First_Name" || ' ' || players."Last_Name" AS batter_name,
-    inning, 
-    inning_topbot, 
-    pitch_type, 
-    delta_run_exp::NUMERIC AS leverage_value, 
-    ABS(delta_run_exp::NUMERIC) AS leverage_impact, 
-    events,
-    launch_angle,
-    hit_distance_sc, 
-    launch_speed
-    FROM pitch_data
-    JOIN players ON pitch_data.batter_id = players.key_mlbam
-    WHERE game_id = '{game_id}'
-    ORDER BY leverage_impact DESC
-    LIMIT 5;
-    """
+    query = """
+        WITH player_with_team AS (
+            SELECT 
+                p.key_mlbam,
+                CONCAT(p."First_Name", ' ', p."Last_Name") AS player_name,
+                t.name AS team_name
+            FROM players p
+            JOIN teams t
+                ON p."teamID" = t.abbreviation_players
+        )
+        SELECT 
+            pwt.player_name AS batter_name,
+            pwt.team_name,
+            inning, 
+            inning_topbot, 
+            pitch_type, 
+            delta_run_exp::NUMERIC AS leverage_value, 
+            ABS(delta_run_exp::NUMERIC) AS leverage_impact, 
+            events,
+            launch_angle,
+            hit_distance_sc, 
+            launch_speed
+        FROM pitch_data pd
+        JOIN player_with_team pwt
+            ON pd.batter_id = pwt.key_mlbam
+        WHERE pd.game_id = %s
+        ORDER BY leverage_impact DESC
+        LIMIT 5;
+        """
 
     connection = get_db_connection()
     if not connection:
@@ -119,7 +167,7 @@ def fetch_critical_moments(game_id, mlb_game_data):
 
     try:
         cursor = connection.cursor()
-        cursor.execute(query)
+        cursor.execute(query, (game_id,))
         results = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(results, columns=columns)
@@ -136,54 +184,39 @@ def fetch_critical_moments(game_id, mlb_game_data):
     finally:
         connection.close()
 
-import matplotlib.pyplot as plt
-from io import BytesIO
-from PIL import Image
 
-import matplotlib.pyplot as plt
-import pandas as pd
-import requests
-from io import BytesIO
-from PIL import Image
-
-import matplotlib.pyplot as plt
-import pandas as pd
-
-import matplotlib.pyplot as plt
-import pandas as pd
+def visualize_critical_moments_table(data, team_name, game_id, return_fig=False):
 
 
-def visualize_critical_moments_table(data, game_id, return_fig=False):
-    """Create a visually enhanced table for Critical Moments."""
-
-    # Step 1: Drop unnecessary columns (remove 'player_id')
+    # Drop unnecessary columns (remove 'player_id' and 'team_name')
     data = data.drop(columns=["player_id"], errors="ignore")
+    data = data.drop(columns=["team_name"], errors="ignore")
 
-    # Step 2: Convert 'inning' column to an integer (remove decimal places)
+    # Convert 'inning' column to an integer (remove decimal places)
     if "inning" in data.columns:
         data["inning"] = data["inning"].astype(int)
 
-    # Step 3: Rename and add new columns
+    # Rename and add new columns
     if "hit_distance_sc" in data.columns:
         data = data.rename(columns={"hit_distance_sc": "Hit Distance"})
     if "launch_angle" in data.columns:
         data["launch_angle"] = data["launch_angle"].round(1)  # Round launch angle to 1 decimal place
 
-    # Step 4: Format leverage values
+    # Format leverage values
     if "leverage_impact" in data.columns:
         data = data.drop(columns=["leverage_impact"], errors="ignore")
     if "leverage_value" in data.columns:
         data["leverage_value"] = data["leverage_value"].round(2)
 
-    # Step 5: Setup figure
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.axis("off")  # Remove x and y axis
+    # Set up figure (Match width with other tables: 10 inches wide)
+    fig, ax = plt.subplots(figsize=(10, 2.5))  # Keep height smaller than before to fit report card
+    ax.axis("off")
 
-    # Step 6: Modify column headers for aesthetics
+    # Modify column headers for aesthetics
     col_labels = data.columns.tolist()
     col_labels = [col.replace("_", " ").title() for col in col_labels]  # Format column names
 
-    # Step 7: Create Table
+    # Create Table
     table = ax.table(
         cellText=data.values,
         colLabels=col_labels,
@@ -191,19 +224,23 @@ def visualize_critical_moments_table(data, game_id, return_fig=False):
         loc="center"
     )
 
-    # Step 8: Increase row height & font size for better readability
+    # Increase font size and adjust row height
     table.auto_set_font_size(False)
-    table.set_fontsize(12)
-    table.scale(1.2, 2.0)  # Adjust row height to improve readability
+    table.set_fontsize(10)
+    table.scale(1.0, 1.5)
 
-    # Step 9: Header formatting (remove all borders except bottom)
+    for (i, j), cell in table.get_celld().items():
+        cell.set_text_props(fontname="Courier")
+
+    # Apply team color to the header row
+    team_color = TEAM_COLORS.get(team_name, "#333333")  # Fallback to dark gray if missing
+
     for col_index in range(len(col_labels)):
-        table[0, col_index].set_facecolor("#404040")  # Dark gray header
-        table[0, col_index].set_text_props(color="white", fontweight="bold", fontsize=12)
-        table[0, col_index].set_edgecolor("black")  # Only bottom border
-        table[0, col_index].set_linewidth(1.5)
+        table[0, col_index].set_facecolor(team_color)  # Use team color
+        table[0, col_index].set_text_props(color="white", fontweight="bold", fontsize=10)
+        table[0, col_index].set_edgecolor("white")  # Remove top/side borders
 
-    # Step 10: Remove row borders and apply alternate row background colors
+    # Remove row borders and apply alternate row colors
     for row_index in range(1, len(data) + 1):
         for col_index in range(len(col_labels)):
             table[row_index, col_index].set_edgecolor("white")  # Remove row borders
@@ -211,8 +248,8 @@ def visualize_critical_moments_table(data, game_id, return_fig=False):
             for col_index in range(len(col_labels)):
                 table[row_index, col_index].set_facecolor("#f2f2f2")
 
-    # Step 11: Color-code leverage impact
-    leverage_column = "Leverage Value"  # Updated to match formatted headers
+    # Color-code leverage impact column
+    leverage_column = "Leverage Value"
     leverage_col_index = col_labels.index(leverage_column)
     for row_index in range(1, len(data) + 1):
         leverage_value = float(data.iloc[row_index - 1]["leverage_value"])
@@ -220,35 +257,97 @@ def visualize_critical_moments_table(data, game_id, return_fig=False):
         table[row_index, leverage_col_index].set_facecolor(color)
         table[row_index, leverage_col_index].set_text_props(color="white", fontweight="bold")
 
-    # Step 12: Adjust column width for better readability
+    # Adjust column width for better readability
     table.auto_set_column_width(list(range(len(col_labels))))
-    plt.subplots_adjust(left=0.1, right=0.9, top=0.85, bottom=0.2)
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.85, bottom=0.2)
 
-    # Return or show figure
     if return_fig:
         return fig
     else:
         plt.show()
 
 
-def generate_critical_moments_visual(game_id, mlb_game_data):
+def generate_critical_moments_visual(game_id):
 
+    AWS_BUCKET_NAME = "baseball-data-mvp"
+    MLB_GAME_DATA_PATH = "mlb_game_data/mlb_game_data.csv"
+    # Load game data from S3 (avoid separate function calls)
+    try:
+        s3_client = boto3.client(
+            "s3",
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        )
 
-    # Fetch critical moments data
-    critical_moments_table = fetch_critical_moments(game_id, mlb_game_data)
+        response = s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=MLB_GAME_DATA_PATH)
+        csv_content = response['Body'].read().decode('utf-8')
 
-    if critical_moments_table is None or critical_moments_table.empty:
-        print(f" No critical moments found for game {game_id}")
+        # Read into DataFrame
+        mlb_game_data = pd.read_csv(StringIO(csv_content))
+        print(f" Loaded {len(mlb_game_data)} game records from S3.")
+    except Exception as e:
+        print(f" Error fetching MLB game data from S3: {e}")
         return None
 
-    print(f" Fetched critical moments for game {game_id}")
+    # Fetch critical moments from the database
+    query = """
+        WITH player_with_team AS (
+            SELECT 
+                p.key_mlbam,
+                CONCAT(p."First_Name", ' ', p."Last_Name") AS player_name,
+                t.name AS team_name
+            FROM players p
+            JOIN teams t
+                ON p."teamID" = t.abbreviation_players
+        )
+        SELECT 
+            pwt.player_name AS batter_name,
+            pwt.team_name,
+            inning, 
+            inning_topbot, 
+            pitch_type, 
+            delta_run_exp::NUMERIC AS leverage_value, 
+            ABS(delta_run_exp::NUMERIC) AS leverage_impact, 
+            events,
+            launch_angle,
+            hit_distance_sc, 
+            launch_speed
+        FROM pitch_data pd
+        JOIN player_with_team pwt
+            ON pd.batter_id = pwt.key_mlbam
+        WHERE pd.game_id = %s
+        ORDER BY leverage_impact DESC
+        LIMIT 5;
+    """
 
-    # Generate the table visualization
-    fig = visualize_critical_moments_table(critical_moments_table, game_id, return_fig=True)
+    connection = get_db_connection()
+    if not connection:
+        print(f" Failed to establish database connection.")
+        return None
 
-    plt.show()
-    return {"critical_moments_fig": fig}
+    try:
+        cursor = connection.cursor()
+        cursor.execute(query, (game_id,))
+        results = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(results, columns=columns)
+
+        if df.empty:
+            print(f" No critical moments found for game {game_id}")
+            return None
+
+        team_name = df["team_name"].iloc[0]
+
+    except Exception as e:
+        print(f" Error fetching critical moments: {e}")
+        return None
+    finally:
+        connection.close()
+
+    # Generate the visualization figure (do not display yet)
+    fig = visualize_critical_moments_table(df, team_name, game_id, return_fig=True)
+
+    return fig  # This will be inserted into the hitter report
 
 
-mlb_game_data = read_mlb_game_data_from_s3()
-generate_critical_moments_visual("746196", mlb_game_data)
+

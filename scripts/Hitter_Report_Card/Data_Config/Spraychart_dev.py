@@ -6,73 +6,79 @@ from matplotlib import axes, pyplot as plt
 from pybaseball import plot_stadium
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from pybaseball.plotting import transform_coordinates, STADIUM_SCALE
 
-def spraychart_final(data: pd.DataFrame, team_stadium: str, title: str = '', tooltips: Optional[List[str]] = None,
-               size: int = 100, colorby: str = 'events', legend_title: str = '', width: int = 500,
-               height: int = 500) -> axes.Axes:
+
+def spraychart_final(data: pd.DataFrame, team_stadium: str, title: str = '',
+                     size: int = 100, colorby: str = 'events', legend_title: str = '',
+                     width: int = 500, height: int = 500) -> axes.Axes:
     """
-    Produces a spraychart using statcast data overlayed on specified stadium
+    Produces a spray chart using statcast data overlayed on specified stadium.
     """
-    # Pull stadium plot to overlay hits on
-    base = plot_stadium(team_stadium, title, width-50, height)
+
+    # Pull stadium plot
+    base = plot_stadium(team_stadium, title, width - 50, height)
 
     # Only plot pitches where something happened
     sub_data = data.copy().reset_index(drop=True)
-    sub_data = sub_data[sub_data['events'].notna() & sub_data['hc_x'].notna() & sub_data['hc_y'].notna()]
 
-    # Define full color mapping for all possible event types
+    sub_data = sub_data.rename(columns={
+        'hc_x': 'x',  # ensure proper naming
+        'hc_y': 'y'
+    })
+
+    sub_data = sub_data[sub_data['events'].notna() & sub_data['x'].notna() & sub_data['y'].notna()]
+
+    # Directly convert to numeric (in case database read is stringy)
+    sub_data['x'] = pd.to_numeric(sub_data['x'], errors='coerce')
+    sub_data['y'] = pd.to_numeric(sub_data['y'], errors='coerce')
+
+    # No need for transform_coordinates — modern statcast hc_x/hc_y should match stadium
+
+    # Define colors for outcomes
     event_colors = {
-        'Single': '#89CFF0',  # Light Blue
-        'Double': '#9370DB',  # Purple
-        'Triple': '#4682B4',  # Steel Blue
-        'Home Run': '#FF4500',  # Red-Orange
-        'Field Out': '#FFA500',  # Orange
-        'Force Out': '#DC143C',  # Crimson
-        'Grounded Into Double Play': '#A9A9A9',  # Dark Gray
-        'Double Play': '#8B0000',  # Dark Red
-        'Field Error': '#FFD700',  # Gold
-        'Fielders Choice': '#20B2AA',  # Light Sea Green
-        'Fielders Choice Out': '#228B22',  # Forest Green
-        'Sac Bunt': '#32CD32',  # Lime Green
-        'Sac Fly': '#98FB98',  # Pale Green
+        'Single': '#89CFF0',
+        'Double': '#9370DB',
+        'Triple': '#4682B4',
+        'Home Run': '#FF4500',
+        'Field Out': '#FFA500',
+        'Force Out': '#DC143C',
+        'Grounded Into Double Play': '#A9A9A9',
+        'Double Play': '#8B0000',
+        'Field Error': '#FFD700',
+        'Fielders Choice': '#20B2AA',
+        'Fielders Choice Out': '#228B22',
+        'Sac Bunt': '#32CD32',
+        'Sac Fly': '#98FB98',
     }
 
     if colorby == 'events':
-        sub_data['event'] = sub_data['events'].str.replace('_', ' ').str.title()  # Format events consistently
+        sub_data['event'] = sub_data['events'].str.replace('_', ' ').str.title()
         color_label = 'event'
-        if not legend_title:
-            legend_title = 'Outcome'
-    elif colorby == 'player':
-        color_label = 'player_name'
-        if not legend_title:
-            legend_title = 'Player'
+        legend_title = legend_title or 'Outcome'
     else:
         color_label = colorby
-        if not legend_title:
-            legend_title = colorby
+        legend_title = legend_title or colorby
 
-    # Filter only the event types that actually appear in the dataset
     unique_events = sub_data[color_label].unique()
-    filtered_colors = {event: event_colors[event] for event in unique_events if event in event_colors}
+    filtered_colors = {event: event_colors.get(event, 'gray') for event in unique_events}
 
-    # Scatter plot of hits with filtered event colors
-    scatters = []
+    # Scatter plot directly
     for event, color in filtered_colors.items():
-        color_sub_data = sub_data[sub_data[color_label] == event]
-        if not color_sub_data.empty:
-            scatter = plt.scatter(
-                color_sub_data["hc_x"], color_sub_data['hc_y'].mul(-1), size, label=event, color=color, alpha=0.7
-            )
-            scatters.append(scatter)
+        event_data = sub_data[sub_data[color_label] == event]
+        plt.scatter(event_data['x'], -event_data['y'], s=size, label=event, color=color, alpha=0.7)
 
-    # Create custom legend (only for events that appeared)
+    # Custom legend
     legend_patches = [mpatches.Patch(color=color, label=event) for event, color in filtered_colors.items()]
 
-    # Shrink the legend, move inside plot, and adjust layout
     plt.legend(
-        handles=legend_patches, title=legend_title, loc='lower right', fontsize=7, frameon=True, ncol=1,
-        bbox_to_anchor=(0.95, 0.1)  # Moves legend inside the bottom-right
+        handles=legend_patches, title=legend_title,
+        loc='lower right', fontsize=7, title_fontsize=8, frameon=True, ncol=1, bbox_to_anchor=(0.95, 0)
     )
 
-    return base  # Keep plt.show() outside
+    #plt.title(title, fontsize=14, fontweight="bold", pad=15, loc='center')
+
+
+    return base
+
 

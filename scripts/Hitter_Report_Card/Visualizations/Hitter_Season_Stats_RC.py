@@ -17,12 +17,46 @@ DB_CONFIG = {
     "port": int(os.getenv("DB_PORT", 5432))  # Default port 5432 if not set
 }
 
+TEAM_COLORS = {
+    "Chicago White Sox": "#27251F",
+    "Detroit Tigers": "#0C2340",
+    "Kansas City Royals": "#004687",
+    "Minnesota Twins": "#002B5C",
+    "Cleveland Guardians": "#0C2340",  # Update this if needed to Guardians
+    "Baltimore Orioles": "#DF4601",
+    "Boston Red Sox": "#BD3039",
+    "New York Yankees": "#003087",
+    "Tampa Bay Rays": "#092C5C",
+    "Toronto Blue Jays": "#134A8E",
+    "Houston Astros": "#002D62",
+    "Los Angeles Angels": "#BA0021",
+    "Oakland Athletics": "#003831",
+    "Seattle Mariners": "#0C2C56",
+    "Texas Rangers": "#003278",
+    "Chicago Cubs": "#0E3386",
+    "Cincinnati Reds": "#C6011F",
+    "Milwaukee Brewers": "#FFC52F",
+    "Pittsburgh Pirates": "#27251F",
+    "St. Louis Cardinals": "#C41E3A",
+    "Atlanta Braves": "#CE1141",
+    "Miami Marlins": "#00A3E0",
+    "New York Mets": "#002D72",
+    "Philadelphia Phillies": "#E81828",
+    "Washington Nationals": "#AB0003",
+    "Arizona Diamondbacks": "#A71930",
+    "Colorado Rockies": "#33006F",
+    "Los Angeles Dodgers": "#005A9C",
+    "San Diego Padres": "#2F241D",
+    "San Francisco Giants": "#FD5A1E"
+}
+
 # SQL query for the most recent season stats
 SQL_QUERY = """
 WITH players_with_team AS (
     SELECT 
         p.*, 
-        t.abbreviation_games
+        t.abbreviation_games,
+        t.name AS team_name
     FROM players p
     JOIN teams t
         ON p."teamID" = t.abbreviation_players
@@ -44,7 +78,8 @@ SELECT
     hs.rbi AS RBI,
     hs.hard_hit_percent AS HHR,
     hs.k_percent AS KR,
-    hs.bb_percent AS BBR
+    hs.bb_percent AS BBR,
+    pwt.team_name
 FROM hitter_season_statistics hs
 JOIN players_with_team pwt
     ON CONCAT(pwt."First_Name", ' ', pwt."Last_Name") = hs.name
@@ -60,58 +95,74 @@ FROM players p
 WHERE p.key_mlbam = %s;
 """
 
-# Fetch most recent hitter stats
-def fetch_recent_hitter_stats_and_name(key_mlbam):
+def fetch_hitter_stats_and_team(key_mlbam):
+
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
 
-        # Fetch the hitter's stats
+        # Execute SQL query to fetch hitter stats
         cursor.execute(SQL_QUERY, (key_mlbam, key_mlbam))
         columns = [desc[0] for desc in cursor.description]
         data = cursor.fetchall()
 
         # Fetch the hitter's name
         cursor.execute(NAME_QUERY, (key_mlbam,))
-        hitter_name = cursor.fetchone()[0]
+        name_result = cursor.fetchone()
 
-        # Close connection
         cursor.close()
         conn.close()
 
-        # Convert stats to a DataFrame
-        stats_df = pd.DataFrame(data, columns=columns)
+        # Check if we successfully retrieved hitter data
+        if not data:
+            print(f" No season stats found for hitter ID: {key_mlbam}")
+            return None, None, None
 
-        return stats_df, hitter_name
+        # Convert results to DataFrame
+        df = pd.DataFrame(data, columns=columns)
+
+        if df.empty:
+            print(f" Hitter stats DataFrame is empty after processing.")
+            return None, None, None
+
+        # Extract hitter name (Ensure a valid result exists)
+        hitter_name = name_result[0] if name_result else None
+        if not hitter_name:
+            print(f" Hitter name not found for ID: {key_mlbam}")
+            return None, None, None
+
+        # Extract team name safely
+        if "team_name" in df.columns:
+            team_name = df["team_name"].iloc[0]
+            df = df.drop(columns=["team_name"])  # Drop after capturing
+        else:
+            print(f" Team name missing in fetched data for hitter ID: {key_mlbam}")
+            return None, None, None
+
+        print(f" Successfully fetched data for {hitter_name} ({team_name}).")
+        return df, hitter_name, team_name
 
     except Exception as e:
-        print(f"Error fetching data: {e}")
-        return None, None
+        print(f" Error fetching hitter data: {e}")
+        return None, None, None
 
-# Visualize most recent hitter stats as a clean table
-def visualize_recent_hitter_stats_table(data, hitter_name, color_dict=None, table_width=12, max_rows=10, return_fig=False):
-    apply_global_styles()
 
-    # Convert percentage columns to % format (only those with "R" in the name)
-    percentage_columns = [col for col in data.columns if col.endswith("r")]  # Detect columns with 'R'
+def visualize_recent_hitter_stats_table(data, team_name: str, hitter_name: str, return_fig=False):
+    data.columns = [col.upper() for col in data.columns]
+
+    percentage_columns = [col for col in data.columns if col.endswith("R")]
     for column in percentage_columns:
         if column in data.columns:
-            data[column] = (data[column] * 100).round(2).astype(str) + '%'  # Convert to string with %
-    print(data)
-    # Ensure OPS is rounded to three decimal places
-    if "ops" in data.columns:
-        data["ops"] = data["ops"].round(3)
+            data[column] = (data[column] * 100).round(2).astype(str) + '%'
 
-    # Convert column names to uppercase
-    data.columns = [col.upper() for col in data.columns]
-    data.columns = [col[:-1] + "%" if col.endswith("R") else col for col in data.columns]
+    if "OPS" in data.columns:
+        data["OPS"] = data["OPS"].round(3)
+    if "BA" in data.columns:
+        data["BA"] = data["BA"].round(3)
 
-    # Increase table size for better visibility
     fig, ax = plt.subplots(figsize=(10, 2))
+    ax.axis('off')
 
-    ax.axis('off')  # Remove axes
-
-    # Create the table
     table = ax.table(
         cellText=data.values,
         colLabels=data.columns,
@@ -119,23 +170,23 @@ def visualize_recent_hitter_stats_table(data, hitter_name, color_dict=None, tabl
         loc='center'
     )
 
-    # Style the table
     table.auto_set_font_size(False)
-    table.set_fontsize(12)  # Increase font size for readability
-    table.auto_set_column_width(col=list(range(len(data.columns))))
+    table.set_fontsize(10)
 
-    # Remove all table borders first
-    for key, cell in table.get_celld().items():
-        cell.set_linewidth(0)  # Remove all borders
+    for (i, j), cell in table.get_celld().items():
+        cell.set_text_props(fontname="Courier")
 
-    # Add a bottom border ONLY for the column headers
-    header_row_index = 0  # The row index for headers
-    for col_index in range(len(data.columns)):
-        table[header_row_index, col_index].visible_edges = "B"  # Only add bottom border
-        table[header_row_index, col_index].set_linewidth(2)  # Adjust line thickness
-        table[header_row_index, col_index].set_edgecolor("black")  # Black border
+    team_color = TEAM_COLORS.get(team_name, "#333333")
 
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    for (i, j), cell in table.get_celld().items():
+        cell.set_edgecolor('lightgray')
+        if i == 0:
+            cell.set_facecolor(team_color)
+            cell.set_text_props(weight='bold', color='white')
+        else:
+            cell.set_facecolor("white")
+
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0)
 
     if return_fig:
         return fig
@@ -143,26 +194,20 @@ def visualize_recent_hitter_stats_table(data, hitter_name, color_dict=None, tabl
         plt.show()
 
 
-
-
 # Main function for testing
 def generate_hitter_season_stats_visual(key_mlbam):
+    stats_df, hitter_name, team_name = fetch_hitter_stats_and_team(key_mlbam)
 
-    # Fetch hitter stats and name
-    recent_hitter_stats, hitter_name = fetch_recent_hitter_stats_and_name(key_mlbam)
-
-    if recent_hitter_stats is None or recent_hitter_stats.empty or hitter_name is None:
-        print(f"Failed to fetch data for hitter ID: {key_mlbam}")
+    if stats_df is None or stats_df.empty or hitter_name is None or team_name is None:
+        print(f"Failed to fetch complete data for hitter ID: {key_mlbam}")
         return None
 
-    print(f"Fetched stats for {hitter_name}.")
+    print(f"Fetched stats for {hitter_name} ({team_name}).")
 
-    # Generate the table visualization
-    fig = visualize_recent_hitter_stats_table(recent_hitter_stats, hitter_name, return_fig=True)
-    plt.show()
-    return {"hitter_stats_fig": fig}
+    fig = visualize_recent_hitter_stats_table(stats_df, team_name, hitter_name, return_fig=True)
 
-generate_hitter_season_stats_visual("621566")
+    return fig, hitter_name, team_name
+
 
 
 

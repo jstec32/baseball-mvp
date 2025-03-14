@@ -1,8 +1,4 @@
-import seaborn as sns
-import matplotlib.pyplot as plt
-import pandas as pd
-import psycopg2
-from matplotlib.patches import Rectangle
+
 
 from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Pitcher_Heatmap_Data import get_db_connection
 
@@ -114,8 +110,7 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
     else:
         print(f"No hits found for {hitter_name}, skipping heatmap generation.")
         return None
-    print(hitter_data)
-    print(game_id)
+
     # **Filter pitch locations for only the selected game**
     game_pitches = hitter_data[hitter_data["game_id"] == game_id]
     print(game_pitches)
@@ -231,7 +226,7 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
     ax.set_xlim(-2.0, 2.0)
     ax.set_ylim(-1.0, 5.0)
 
-    ax.set_title(f"Hitter Heatmap - {hitter_name} (Game {game_id})", fontsize=6)
+    #ax.set_title(f"Hitter Heatmap - {hitter_name} (Game {game_id})", fontsize=14,fontweight="bold")
 
     ax.set_xticks([])  # Hide x-axis ticks
     ax.set_yticks([])  # Hide y-axis ticks
@@ -252,7 +247,7 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
         handles=legend_patches,
         title="Event Legend",
         loc='lower right',
-        fontsize=6,
+        fontsize=7,
         frameon=True,
         ncol=1,
         bbox_to_anchor=(1.15, 0)
@@ -260,7 +255,7 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
     plt.subplots_adjust(left=0.15, right=0.85, top=0.85, bottom=0.15)
 
     print(f"Hitter heatmap generated for {hitter_name} in Game {game_id}.")
-    plt.show()
+
     return fig
 
 # Example Usage
