@@ -15,7 +15,7 @@ from scripts.Scouting_Report_Template_Configuration.ChatGPT_model_prep.Pitcher_H
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_BUCKET_NAME = "baseball-data-mvp"
-MLB_GAME_DATA_PATH = "mlb_game_data/mlb_game_data.csv"  # Adjust path if needed
+MLB_GAME_DATA_PATH = "mlb_game_data/mlb_game_data_2025.csv"  # Adjust path if needed
 
 TEAM_COLORS = {
     "Chicago White Sox": "#27251F",
@@ -186,61 +186,69 @@ def fetch_critical_moments(game_id, mlb_game_data):
 
 
 def visualize_critical_moments_table(data, team_name, game_id, return_fig=False):
+    if {"inning", "inning_topbot"}.issubset(data.columns):
+        data["Inning"] = data["inning_topbot"].str.title() + " " + data["inning"].astype(int).astype(str)
+        data.drop(columns=["inning", "inning_topbot"], inplace=True)
 
-
-    # Drop unnecessary columns (remove 'player_id' and 'team_name')
-    data = data.drop(columns=["player_id"], errors="ignore")
-    data = data.drop(columns=["team_name"], errors="ignore")
-
-    # Convert 'inning' column to an integer (remove decimal places)
-    if "inning" in data.columns:
-        data["inning"] = data["inning"].astype(int)
-
-    # Rename and add new columns
-    if "hit_distance_sc" in data.columns:
-        data = data.rename(columns={"hit_distance_sc": "Hit Distance"})
+    # Format columns
     if "launch_angle" in data.columns:
-        data["launch_angle"] = data["launch_angle"].round(1)  # Round launch angle to 1 decimal place
-
-    # Format leverage values
-    if "leverage_impact" in data.columns:
-        data = data.drop(columns=["leverage_impact"], errors="ignore")
+        data["launch_angle"] = data["launch_angle"].round(1)
     if "leverage_value" in data.columns:
         data["leverage_value"] = data["leverage_value"].round(2)
+    if "events" in data.columns:
+        data["events"] = data["events"].str.replace("_", " ").str.title()
 
-    # Set up figure (Match width with other tables: 10 inches wide)
+    # Drop not needed columns
+    data.drop(columns=["player_id", "team_name", "leverage_impact"], errors="ignore", inplace=True)
+    data.fillna("", inplace=True)
+
+    header_renames = {
+        "batter_name": "Batter",
+        "Inning": "Inning",
+        "pitch_type": "Pitch",
+        "leverage_value": "Leverage",
+        "events": "Event",
+        "launch_angle": "LA",
+        "hit_distance_sc": "Distance",
+        "launch_speed": "Exit Velo"
+    }
+
+    col_labels = data.columns.tolist()
+
+    def smart_title(text):
+        return text if text.isupper() else text.title()
+
+    col_labels = [smart_title(header_renames.get(col, col)) for col in col_labels]
+
+    # Set up figure for report
     fig, ax = plt.subplots(figsize=(10, 2.5))  # Keep height smaller than before to fit report card
     ax.axis("off")
-
-    # Modify column headers for aesthetics
-    col_labels = data.columns.tolist()
-    col_labels = [col.replace("_", " ").title() for col in col_labels]  # Format column names
 
     # Create Table
     table = ax.table(
         cellText=data.values,
         colLabels=col_labels,
         cellLoc="center",
-        loc="center"
+        bbox=[0, 0, 1, 1]
     )
 
-    # Increase font size and adjust row height
+    # Increase font size
     table.auto_set_font_size(False)
-    table.set_fontsize(10)
+    table.set_fontsize(12)
     table.scale(1.0, 1.5)
 
     for (i, j), cell in table.get_celld().items():
         cell.set_text_props(fontname="Courier")
 
-    # Apply team color to the header row
+
     team_color = TEAM_COLORS.get(team_name, "#333333")  # Fallback to dark gray if missing
 
     for col_index in range(len(col_labels)):
         table[0, col_index].set_facecolor(team_color)  # Use team color
-        table[0, col_index].set_text_props(color="white", fontweight="bold", fontsize=10)
+        table[0, col_index].set_text_props(color="white", fontweight="bold", fontsize=12)
         table[0, col_index].set_edgecolor("white")  # Remove top/side borders
 
-    # Remove row borders and apply alternate row colors
+
     for row_index in range(1, len(data) + 1):
         for col_index in range(len(col_labels)):
             table[row_index, col_index].set_edgecolor("white")  # Remove row borders
@@ -248,18 +256,16 @@ def visualize_critical_moments_table(data, team_name, game_id, return_fig=False)
             for col_index in range(len(col_labels)):
                 table[row_index, col_index].set_facecolor("#f2f2f2")
 
-    # Color-code leverage impact column
-    leverage_column = "Leverage Value"
+    # Color-code leverage column
+    leverage_column = "Leverage"
     leverage_col_index = col_labels.index(leverage_column)
     for row_index in range(1, len(data) + 1):
         leverage_value = float(data.iloc[row_index - 1]["leverage_value"])
         color = "#ff4d4d" if leverage_value < 0 else "#4CAF50"
         table[row_index, leverage_col_index].set_facecolor(color)
         table[row_index, leverage_col_index].set_text_props(color="white", fontweight="bold")
-
-    # Adjust column width for better readability
     table.auto_set_column_width(list(range(len(col_labels))))
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.85, bottom=0.2)
+
 
     if return_fig:
         return fig
@@ -271,7 +277,7 @@ def generate_critical_moments_visual(game_id):
 
     AWS_BUCKET_NAME = "baseball-data-mvp"
     MLB_GAME_DATA_PATH = "mlb_game_data/mlb_game_data.csv"
-    # Load game data from S3 (avoid separate function calls)
+    # Load from S3
     try:
         s3_client = boto3.client(
             "s3",
@@ -282,14 +288,14 @@ def generate_critical_moments_visual(game_id):
         response = s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=MLB_GAME_DATA_PATH)
         csv_content = response['Body'].read().decode('utf-8')
 
-        # Read into DataFrame
+        # Read DF
         mlb_game_data = pd.read_csv(StringIO(csv_content))
         print(f" Loaded {len(mlb_game_data)} game records from S3.")
     except Exception as e:
         print(f" Error fetching MLB game data from S3: {e}")
         return None
 
-    # Fetch critical moments from the database
+    # Fetch critical moments
     query = """
         WITH player_with_team AS (
             SELECT 
@@ -344,10 +350,8 @@ def generate_critical_moments_visual(game_id):
     finally:
         connection.close()
 
-    # Generate the visualization figure (do not display yet)
+    # Generate visualization
     fig = visualize_critical_moments_table(df, team_name, game_id, return_fig=True)
 
-    return fig  # This will be inserted into the hitter report
-
-
+    return fig
 

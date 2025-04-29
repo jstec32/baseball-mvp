@@ -28,7 +28,7 @@ print(f" Statcast CSV Columns: {statcast_columns}")
 
 
 
-# Load database credentials from .env
+# Load database credentials from .env.local
 DB_CONFIG = {
     "host": os.getenv("DB_HOST"),
     "database": os.getenv("DB_NAME"),

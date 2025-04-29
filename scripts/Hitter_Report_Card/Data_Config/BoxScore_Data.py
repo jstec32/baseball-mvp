@@ -72,7 +72,7 @@ def fetch_box_score_raw(game_pk):
             important_stats = [
                 "atBats", "runs", "hits", "doubles", "triples", "homeRuns",
                 "rbi", "baseOnBalls", "strikeOuts", "sacFlies", "sacBunts",
-                "stolenBases", "caughtStealing", "leftOnBase", "groundIntoDoublePlay"
+                "stolenBases", "caughtStealing", "leftOnBase", "groundIntoDoublePlay","hitByPitch"
             ]
 
             for stat in important_stats:
@@ -85,7 +85,7 @@ def fetch_box_score_raw(game_pk):
         "game_pk", "team", "player_id", "name", "atBats", "runs", "hits",
         "doubles", "triples", "homeRuns", "rbi", "baseOnBalls", "strikeOuts",
         "sacFlies", "sacBunts", "stolenBases", "caughtStealing", "leftOnBase",
-        "groundIntoDoublePlay"
+        "groundIntoDoublePlay","hitByPitch"
     ]
 
     df = pd.DataFrame(all_rows, columns=columns_order)

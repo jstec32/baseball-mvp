@@ -10,11 +10,9 @@ from matplotlib.patches import Rectangle
 import seaborn as sns
 import matplotlib.patches as mpatches
 
-# Fetch hitter data for heatmap visualization (including all pitches)
+
 def fetch_hitter_data_with_pitches(hitter_id):
-    """
-    Fetch batted ball data for a specific hitter, including all pitch locations.
-    """
+
     query = f"""
     SELECT 
         pd.game_id,
@@ -86,11 +84,11 @@ def draw_attack_zones():
 
 
 
-# Generate hitter heatmap with pitch overlays
+
 def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
 
 
-    # Fetch **all** data for an accurate heatmap
+
     hitter_data = fetch_hitter_data_with_pitches(hitter_id)
 
     if hitter_data is None or hitter_data.empty:
@@ -103,7 +101,7 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
         print(f"No valid data for hitter {hitter_name}.")
         return None
 
-    # Normalize hit weights for KDE plot (use full data)
+
     weights = hitter_data['is_hit'].astype(int)
     if weights.sum() > 0:
         weights = weights / weights.sum()
@@ -111,7 +109,7 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
         print(f"No hits found for {hitter_name}, skipping heatmap generation.")
         return None
 
-    # **Filter pitch locations for only the selected game**
+
     game_pitches = hitter_data[hitter_data["game_id"] == game_id]
     print(game_pitches)
     EVENT_COLORS = {
@@ -182,7 +180,7 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
     fig, ax = plt.subplots(figsize=(4, 4))
 
 
-    # Plot KDE heatmap using all available data
+
     try:
         sns.kdeplot(
             x=hitter_data['plate_x'],
@@ -197,11 +195,11 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
         print(f"Error generating hitter heatmap: {e}")
         return None
 
-    # Separate hits & misses for the selected game
+
     hit_data = game_pitches[game_pitches["is_hit"]]
     miss_data = game_pitches[~game_pitches["is_hit"]]
 
-    # Plot all game pitches (colored by plot_event)
+
     for event, color in event_color_map.items():
         event_data = game_pitches[game_pitches["plot_event"] == event]
         ax.scatter(
@@ -215,39 +213,39 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
             label=event  # Each pitch type could appear in the legend
         )
 
-    # --- New Section ---
+
     # Draw the home plate, strike zone, and attack zones
     draw_home_plate()
     draw_sz()
 
-    # -------------------
 
-    # Formatting
+
+
     ax.set_xlim(-2.0, 2.0)
     ax.set_ylim(-1.0, 5.0)
 
     #ax.set_title(f"Hitter Heatmap - {hitter_name} (Game {game_id})", fontsize=14,fontweight="bold")
 
-    ax.set_xticks([])  # Hide x-axis ticks
-    ax.set_yticks([])  # Hide y-axis ticks
+    ax.set_xticks([])
+    ax.set_yticks([])
     ax.set_xlabel("")
     ax.set_ylabel("")
-    ax.set_frame_on(False)  # Removes the frame
-    ax.axis('off')  # Completely removes axis visuals
+    ax.set_frame_on(False)
+    ax.axis('off')
 
-    # Build dynamic legend - only show events that actually appeared in the game
+
     unique_events_in_game = game_pitches["plot_event"].unique()
     legend_patches = [
         mpatches.Patch(color=event_color_map[event], label=event.replace("_", " ").title())
         for event in unique_events_in_game
     ]
 
-    # Place legend inside plot (bottom-right)
+
     ax.legend(
         handles=legend_patches,
         title="Event Legend",
         loc='lower right',
-        fontsize=7,
+        fontsize=6,
         frameon=True,
         ncol=1,
         bbox_to_anchor=(1.15, 0)
@@ -257,6 +255,3 @@ def generate_hitter_heatmap(hitter_id, hitter_name, game_id):
     print(f"Hitter heatmap generated for {hitter_name} in Game {game_id}.")
 
     return fig
-
-# Example Usage
-generate_hitter_heatmap("621566", "Matt Olson","747121")

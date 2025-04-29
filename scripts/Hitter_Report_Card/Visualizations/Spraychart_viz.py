@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pybaseball import statcast_single_game
 from scripts.Hitter_Report_Card.Data_Config.Spraychart_dev import spraychart_final
 import boto3
-# Load .env file
+# Load .env.local file
 load_dotenv()  # Ensure environment variables are loaded correctly
 
 # AWS Configuration
@@ -62,33 +62,33 @@ def generate_spray_chart_visual(batter_id, game_date):
         print(f" Error fetching Statcast data from database: {e}")
         return None
 
-    # Step 2: Fetch game information (home & away team)
+
     sample_game_ids = statcast_data["game_id"].unique()
     game_info_list = []
 
     for game_id in sample_game_ids:
         try:
             game_data = statcast_single_game(game_id)
-            game_data["game_id"] = game_id  # Manually add game_id
+            game_data["game_id"] = game_id
 
             if "home_team" in game_data.columns and "away_team" in game_data.columns:
                 game_info = game_data[["game_id", "home_team", "away_team"]].drop_duplicates()
                 game_info_list.append(game_info)
             else:
-                print(f"⚠ Warning: home_team/away_team missing for game {game_id}")
+                print(f"Warning: home_team/away_team missing for game {game_id}")
 
         except Exception as e:
             print(f" Error fetching data for game {game_id}: {e}")
 
     if game_info_list:
         game_info_df = pd.concat(game_info_list, ignore_index=True)
+
     else:
         game_info_df = pd.DataFrame(columns=["game_id", "home_team", "away_team"])
 
     # Merge `home_team` and `away_team` into `statcast_data`
     statcast_data = statcast_data.merge(game_info_df, on="game_id", how="left")
 
-    # Step 3: Fetch Full Team Names from SQL Database
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
@@ -117,21 +117,24 @@ def generate_spray_chart_visual(batter_id, game_date):
 
     except Exception as e:
         print(f" Error fetching team or player information: {e}")
-        team_info = pd.DataFrame()  # Ensure script continues even if fetching fails
+        team_info = pd.DataFrame()
         player_name = f"Player {batter_id}"
 
-    # Step 4: Merge team name with statcast_data
+
     if 'home_team' in statcast_data.columns and 'abbreviation_games' in team_info.columns:
         statcast_data = statcast_data.merge(team_info, left_on="home_team", right_on="abbreviation_games", how="left")
         statcast_data.drop(columns=["abbreviation_games"], inplace=True)
     else:
         print(" Skipping merge due to missing columns.")
 
-    # Confirm merge worked
+
 
     # Step 5: Generate Spray Chart
     if not statcast_data.empty:
+        print(statcast_data[["home_team", "team_name"]].drop_duplicates())
         stadium_name = statcast_data["team_name"].iloc[0]  # Using full team name for spray chart
+        stadium_name = stadium_name.replace(" ", "_")
+        print(f"Using stadium_name: {stadium_name}")
 
         fig = spraychart_final(statcast_data, stadium_name, title=f"",
                                legend_title='Outcome')
@@ -140,6 +143,3 @@ def generate_spray_chart_visual(batter_id, game_date):
     else:
         print(f" No data found for batter {batter_id} on {game_date}.")
         return None
-
-
-

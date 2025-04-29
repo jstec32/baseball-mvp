@@ -27,8 +27,8 @@ SELECT
     END AS at_bat
 FROM pitch_data
 WHERE batter_id = %s
-    AND game_date >= '2024-01-01'
-    AND game_date <= '2024-12-31'
+    AND game_date >= '2025-01-01'
+    AND game_date <= '2025-12-31'
 ORDER BY game_date;
 """
 
@@ -73,28 +73,40 @@ def compute_rolling_averages_from_db(hitter_id, rolling_window=15):
         total_bases=('total_bases', 'sum'),
         at_bats=('at_bat', 'sum')
     ).reset_index()
+    daily_stats = daily_stats.sort_values("game_date").reset_index(drop=True)
 
-    # Calculate cumulative stats
-    daily_stats['cumulative_hits'] = daily_stats['hits'].cumsum()
-    daily_stats['cumulative_on_base'] = daily_stats['on_base'].cumsum()
-    daily_stats['cumulative_total_bases'] = daily_stats['total_bases'].cumsum()
-    daily_stats['cumulative_at_bats'] = daily_stats['at_bats'].cumsum()
+    if daily_stats.empty:
+        print("No daily stats found after aggregation.")
+        return None
 
-    # Calculate metrics
-    daily_stats['BA'] = daily_stats['cumulative_hits'] / daily_stats['cumulative_at_bats']
-    daily_stats['OBP'] = (daily_stats['cumulative_hits'] + daily_stats['cumulative_on_base']) / (
-        daily_stats['cumulative_at_bats'] + daily_stats['cumulative_on_base']
+    # Avoid divide-by-zero
+    daily_stats = daily_stats[daily_stats["at_bats"] > 0]
+
+    # Compute raw per-game stats (no rolling yet)
+    daily_stats['BA'] = daily_stats['hits'] / daily_stats['at_bats']
+    daily_stats['OBP'] = (daily_stats['hits'] + daily_stats['on_base']) / (
+        daily_stats['at_bats'] + daily_stats['on_base']
     )
-    daily_stats['SLG'] = daily_stats['cumulative_total_bases'] / daily_stats['cumulative_at_bats']
+    daily_stats['SLG'] = daily_stats['total_bases'] / daily_stats['at_bats']
     daily_stats['OPS'] = daily_stats['OBP'] + daily_stats['SLG']
 
-    # Compute rolling averages
-    daily_stats['rolling_BA'] = daily_stats['BA'].rolling(rolling_window).mean()
-    daily_stats['rolling_OBP'] = daily_stats['OBP'].rolling(rolling_window).mean()
-    daily_stats['rolling_SLG'] = daily_stats['SLG'].rolling(rolling_window).mean()
-    daily_stats['rolling_OPS'] = daily_stats['OPS'].rolling(rolling_window).mean()
+    # If we only have one game, set rolling_* equal to raw daily stats
+    if len(daily_stats) < rolling_window:
+        daily_stats['rolling_BA'] = daily_stats['BA']
+        daily_stats['rolling_OBP'] = daily_stats['OBP']
+        daily_stats['rolling_SLG'] = daily_stats['SLG']
+        daily_stats['rolling_OPS'] = daily_stats['OPS']
+    else:
+        # Rolling averages over the raw daily values
+        daily_stats['rolling_BA'] = daily_stats['BA'].rolling(window=rolling_window, min_periods=1).mean()
+        daily_stats['rolling_OBP'] = daily_stats['OBP'].rolling(window=rolling_window, min_periods=1).mean()
+        daily_stats['rolling_SLG'] = daily_stats['SLG'].rolling(window=rolling_window, min_periods=1).mean()
+        daily_stats['rolling_OPS'] = daily_stats['OPS'].rolling(window=rolling_window, min_periods=1).mean()
+
+
 
     return daily_stats
+
 
 def plot_rolling_averages_for_pdf(hitter_id, rolling_avg_data, return_fig=False):
     """Generates a properly formatted rolling average chart for the PDF report."""
@@ -116,10 +128,17 @@ def plot_rolling_averages_for_pdf(hitter_id, rolling_avg_data, return_fig=False)
 
     for stat, label, color in zip(stats_to_plot, labels, colors):
         if stat in rolling_avg_data.columns:
-            ax.plot(rolling_avg_data["game_date"], rolling_avg_data[stat], label=label, color=color, linewidth=2)
+            ax.plot(
+                rolling_avg_data["game_date"],
+                rolling_avg_data[stat],
+                label=label,
+                color=color,
+                linewidth=2,
+                marker='o'  # <-- Add this
+            )
 
     #Ensure consistent title formatting
-    #ax.set_title(f"{player_name} - Rolling Averages (2024 Season)",
+    #ax.set_title(f"{player_name} - Rolling Averages (2025 Season)",
                  #fontsize=14, fontweight="bold", pad=15, loc='center')
 
     #Ensure labels are clearly visible
@@ -139,6 +158,9 @@ def plot_rolling_averages_for_pdf(hitter_id, rolling_avg_data, return_fig=False)
 
     # Format y-axis values to three decimal places
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.3f}"))
+    latest_date = rolling_avg_data["game_date"].max()
+    season_start = pd.to_datetime("2025-03-27")
+    ax.set_xlim(left=season_start, right=latest_date + pd.Timedelta(days=2))
 
     #Ensure tight layout so the title does not get cut off
     plt.tight_layout(rect=[0, 0, 1, 0.95])
@@ -186,9 +208,9 @@ def generate_rolling_averages_visual(hitter_id, rolling_window=15):
                 WHEN events NOT IN ('walk', 'hit_by_pitch', 'sacrifice', 'catcher_interference', 'intent_walk', 'null') THEN 1 ELSE 0
             END AS at_bat
         FROM pitch_data
-        WHERE batter_id = %s
-            AND game_date >= '2024-01-01'
-            AND game_date <= '2024-12-31'
+        WHERE batter_id = '%s'
+            AND game_date >= '2025-01-01'
+            AND game_date <= '2025-12-31'
         ORDER BY game_date;
     """
 
@@ -259,10 +281,10 @@ def generate_rolling_averages_visual(hitter_id, rolling_window=15):
             ax.plot(daily_stats["game_date"], daily_stats[stat], label=label, color=color, linewidth=2)
 
     # Step 9: Customize plot
-    ax.set_title(f"{player_name}'s Rolling Averages (2024 Season)", fontsize=20, weight="bold")
+    ax.set_title(f"{player_name}'s Rolling Averages (2025 Season)", fontsize=20, weight="bold")
     ax.set_xlabel("Game Date", fontsize=12)
     ax.set_ylabel("Statistic Value", fontsize=12)
-    ax.legend(title="Metrics", fontsize=10, loc='upper center', bbox_to_anchor=(0.5, -0.20), ncol=2)
+    ax.legend(title="Metrics", fontsize=12, loc='upper center', bbox_to_anchor=(0.5, -0.20), ncol=2)
     ax.grid(axis="y", linestyle="--", alpha=0.7)
 
     # Step 10: Set x-axis date formatting
@@ -275,5 +297,3 @@ def generate_rolling_averages_visual(hitter_id, rolling_window=15):
     plt.tight_layout()
 
     return fig  # This figure will be inserted into the hitter report
-
-

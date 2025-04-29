@@ -1,4 +1,5 @@
 import os
+import unicodedata
 import webbrowser
 
 import boto3
@@ -7,7 +8,8 @@ import json
 import pandas as pd
 import psycopg2
 import rembg
-
+from fpdf import FPDF
+from pdf2image import convert_from_path
 import requests
 from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
@@ -37,7 +39,16 @@ DB_CONFIG = {
 # S3 Configuration
 S3_BUCKET = "scouting-reports-bucket"
 S3_KEY = "All Real Teams and Logos v2.json"
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_BUCKET_NAME = "baseball-data-mvp"
+MERGED_KEY = "mlb_game_data/merged_pitch_box_scores_2025.csv"
 
+def remove_accents(input_str):
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', input_str)
+        if unicodedata.category(c) != 'Mn'
+    )
 # Fetch player name from the database
 def fetch_player_name(player_id):
     query = """SELECT CONCAT("First_Name", ' ', "Last_Name") AS player_name, "Position","Bats"  FROM players WHERE key_mlbam = %s;"""
@@ -96,9 +107,9 @@ def load_team_logos_from_s3():
 
 #Fetch Player's Opponent
 def load_player_opponent(game_id,team_name):
-    S3_BUCKET = "scouting-reports-bucket"
+    S3_BUCKET = "baseball-data-mvp"
     S3_FOLDER = "mlb_game_data"
-    S3_KEY = "mlb_game_schedule_2024.csv"
+    S3_KEY = "mlb_game_data_2025.csv"
     S3_full_key = f"{S3_FOLDER}/{S3_KEY}"
     s3_client = boto3.client(
         "s3",
@@ -149,7 +160,7 @@ def fetch_team_logo(team_name):
     )
     # Format the team name for the correct S3 key
     s3_key = f"{S3_LOGO_FOLDER}/{team_name.replace(' ', '_')}.png"
-
+    print(s3_key)
     try:
         # Attempt to fetch the logo from S3
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
@@ -186,12 +197,47 @@ def fetch_player_headshot(player_id):
         print("Failed to fetch player headshot.")
         return None
 
+def get_game_score_from_s3(game_id, batter_id):
+    """Loads merged game data from S3 and returns scaled game score for one hitter/game."""
+    try:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY
+        )
+
+        response = s3.get_object(Bucket=AWS_BUCKET_NAME, Key=MERGED_KEY)
+        df = pd.read_csv(StringIO(response["Body"].read().decode("utf-8")))
+        game_id = int(game_id)
+        batter_id = int(batter_id)
+        print("Looking for:", game_id, batter_id)
+
+
+        # Clean/convert IDs to ensure they match
+        df["game_id"] = df["game_id"].astype(int)
+        df["batter_id"] = df["batter_id"].astype(int)
+
+        row = df[(df["game_id"] == game_id) & (df["batter_id"] == batter_id)]
+        if not row.empty:
+            return round(row.iloc[0]["scaled_game_score"], 1)
+        else:
+            return None
+
+    except Exception as e:
+        print(f"Error loading game score: {e}")
+        return None
+
 # Generate the top banner
 def generate_banner_section(pdf, hitter_name, game_date, player_id, team_name, position,game_id, Bats):
     """Generates a structured banner with a player's image, team logo, and centered text."""
     # Get opponent name
     opponent = load_player_opponent(game_id, team_name)
 
+    #Hitter Game Score
+    print(game_id)
+    print(player_id)
+    game_score = get_game_score_from_s3(game_id, player_id)
+    print(game_score)
     # Dynamically get team color (fallback to dark gray if missing)
     team_color = TEAM_COLORS.get(team_name, "#333333")
 
@@ -232,7 +278,21 @@ def generate_banner_section(pdf, hitter_name, game_date, player_id, team_name, p
         # Position team logo (right side, aligned vertically)
         logo_x = pdf.w - 30 - margin - 5  # Align to right
         logo_y = margin + (banner_height - team_logo_size) / 2  # Center vertically
-        pdf.image(logo_buf, x=logo_x, y=logo_y, w=30, h=team_logo_size)
+        # Get original dimensions
+        logo_width, logo_height = team_logo.size
+        aspect_ratio = logo_width / logo_height
+
+        # Define desired logo height
+        desired_height = team_logo_size  # 20 pixels
+
+        # Calculate width dynamically based on aspect ratio
+        dynamic_width = desired_height * aspect_ratio
+
+        # Adjust X position to keep logo aligned to the right
+        logo_x = pdf.w - margin - dynamic_width - 5  # Adjusted for new width
+
+        # Insert image preserving original aspect ratio
+        pdf.image(logo_buf, x=logo_x, y=logo_y, w=dynamic_width, h=desired_height)
 
     # Center the text
     pdf.set_text_color(255, 255, 255)  # White text
@@ -251,7 +311,11 @@ def generate_banner_section(pdf, hitter_name, game_date, player_id, team_name, p
     # Position and Throws Info
     pdf.set_font("Courier", "", 10)
     pdf.set_xy(text_x - 40, margin + 22)
-    pdf.cell(80, 8, f"{position.upper()} BATS: {Bats}", align="C")
+    pdf.cell(80, 8, f"POSITION: {position.upper()} BATS: {Bats}", align="C")
+
+    pdf.set_font("Courier", "", 10)
+    pdf.set_xy(text_x - 40, margin + 26)
+    pdf.cell(80, 8, f"GAME SCORE: {game_score}", align="C")
 
 
 
@@ -280,21 +344,23 @@ class PDF(FPDF):
     def footer(self):
         """Create footer for the PDF with data source and stat explanations."""
         self.set_y(-15)  # Move to the bottom of the page
-        self.set_font("Helvetica", "I", 8)  # Use an italic font for footer
+        self.set_font("Helvetica", "I", 6)  # Use an italic font for footer
         self.set_text_color(100, 100, 100)  # Gray text
 
         # Footer text: Data source & metric explanations
         footer_text = (
-            "Data sourced from MLB StatsAPI | RE_ADDED = Run Expectancy Added | "
-            "Leverage Value = Change in Expected Runs Due to Play Outcome"
+            "Data sourced from MLB StatsAPI | Photos from MLB | RE_ADDED = Run Expectancy Added | "
+            "Leverage Value = Change in Expected Runs Due to Play Outcome | @jbaseball_viz"
         )
 
-        self.cell(0, 10, footer_text, align="R")
+        self.cell(0, 10, footer_text, align="C")
 
     def add_matplotlib_figure(self, fig, x, y, w, h):
         """Embed a Matplotlib figure directly into the PDF."""
         buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")  # High DPI for clarity
+
+        fig.savefig(buf, format="png", dpi=600, bbox_inches="tight")  # High DPI for clarity
+        fig.tight_layout(pad=1.0)
         buf.seek(0)
         self.image(buf, x, y, w, h)
 
@@ -381,7 +447,8 @@ def generate_hitter_report_pdf(player_id, game_date):
         critical_table = None
 
     #Generate PDF Layout
-    pdf_width, pdf_height = 210, 210  # Square layout for social media sharing
+    pdf_width, pdf_height = 210, 240
+    # Square layout for social media sharing
     pdf = PDF(orientation="P", unit="mm", format=(pdf_width, pdf_height))
     pdf.hitter_name = hitter_name
     pdf.game_date = game_date
@@ -391,88 +458,93 @@ def generate_hitter_report_pdf(player_id, game_date):
     #Create player headshot
 
     # Adjust layout settings
-    margin = 6
+    margin = 3
     full_width = pdf_width - (2 * margin)  # Tables aligned with the banner width
     third_width = (full_width - (2 * margin)) / 3  # Three visuals in a row
-    row_height = 40  # Adjusted height for better fit
+    row_height = 40  # Slightly increased for better fit
     pdf.set_text_color(0, 0, 0)  # Black text
 
-
-    y_pos = 51  # Adjusted position below the banner
-    pdf.set_xy(margin, y_pos - 6)  # Move slightly closer to the table
-    pdf.set_fill_color(255, 255, 255)  # Ensure background fill prevents overlap
+    ### **Step 1: Position the Game Performance Table**
+    y_pos = 30  # Adjusted position below the banner
     pdf.set_font("Courier", "B", 14)
-    pdf.cell(full_width, 6, "Game Performance Table", align="C")
+    pdf.set_fill_color(255, 255, 255)  # Background fill to prevent overlap
+    pdf.set_xy(margin, y_pos - 3)  # Move title closer to table
 
-    # **Game Performance Table**
-    y_pos -= 2
-    # Game Performance Table
-    pdf.add_matplotlib_figure(game_perf_table, x=margin, y=y_pos, w=full_width, h=row_height)
-    y_pos += row_height
 
-    # Add Titles Above Visuals
-    pdf.set_text_color(0, 0, 0)  # Black text
-    pdf.set_font("Courier", "B", 8)
+    # Insert Game Performance Table
+    pdf.set_font("Courier", "B", 14)
+    y_pos += 18  # Ensure spacing
+    pdf.add_matplotlib_figure(game_perf_table, x=margin, y=y_pos, w=full_width, h=17)
+    y_pos += row_height - 10  # Add extra space before next section
+
+    ### **Step 2: Position the Visualizations**
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Courier", "B", 9)
 
     # Calculate X Positions for Centering
     rolling_chart_x = margin + (third_width / 2)
     heatmap_x = margin + third_width + (third_width / 2) + 3
     spray_chart_x = margin + (2 * third_width) + (third_width / 2) + 6
 
-    # Position Text Above Charts
-    title_y_pos = y_pos - 8  # Move slightly above the charts
+    # Titles Above Visualizations
+    title_y_pos = y_pos - 8
 
-    # Centered Title - Rolling Averages
+    # Rolling Averages Title
     pdf.set_xy(rolling_chart_x - (third_width / 2), title_y_pos)
-    pdf.cell(third_width, 6, f"{hitter_name} - Rolling Averages", align="C")
+    pdf.cell(third_width, 8, f"{hitter_name} - Rolling Averages", align="C")
 
-    # Centered Title - Hitter Heatmap
+    # Heatmap Title
     pdf.set_xy(heatmap_x - (third_width / 2), title_y_pos)
-    pdf.cell(third_width, 6, f"Hitter Heatmap", align="C")
+    pdf.cell(third_width, 8, "Hitter Heatmap", align="C")
 
-    # Centered Title - Spray Chart
+    # Spray Chart Title
     pdf.set_xy(spray_chart_x - (third_width / 2), title_y_pos)
-    pdf.cell(third_width, 6, f"Spray Chart", align="C")
-    # Three visualizations in a single row
-    pdf.add_matplotlib_figure(rolling_chart, x=margin, y=y_pos, w=third_width, h=row_height)
-    pdf.add_matplotlib_figure(heatmap, x=margin + third_width + 3, y=y_pos, w=third_width, h=row_height)
-    pdf.add_matplotlib_figure(spray_chart, x=margin + (2 * third_width) + 6, y=y_pos, w=third_width, h=row_height)
-    y_pos += row_height
+    pdf.cell(third_width, 8, "Spray Chart", align="C")
 
-    # Season Stats Table
-    pdf.set_xy(margin, y_pos - 6)  # Adjusted position above season stats table
+    # Insert Visuals
+    pdf.add_matplotlib_figure(rolling_chart, x=margin, y=y_pos, w=third_width, h=55)
+    pdf.add_matplotlib_figure(heatmap, x=margin + third_width + 3, y=y_pos, w=third_width, h=55)
+    pdf.add_matplotlib_figure(spray_chart, x=margin + (2 * third_width) + 6, y=y_pos, w=third_width, h=55)
+    y_pos += row_height + 8  # Extra space for readability
+
+    ### **Step 3: Adjust Position of Season Stats Table**
+    y_pos += 8  # Move the entire section down more
+    pdf.set_xy(margin, y_pos - 1)  # Title closer to table
     pdf.set_font("Courier", "B", 14)
-    pdf.set_fill_color(255, 255, 255)  # Ensure background fill prevents overlap
-    pdf.cell(full_width, 6, "Season Statistics Table", align="C")  # Small spacing before inserting the table
-    pdf.add_matplotlib_figure(season_table, x=margin, y=y_pos, w=full_width, h=row_height)
-    y_pos += row_height
 
-    # Critical Moments Table (Ensuring it fits)
-    critical_table_y_pos = y_pos
-    pdf.set_font("Courier", "B", 14)  # Use Times Bold, size 14
-    pdf.set_fill_color(255, 255, 255)  # Ensure background fill prevents overlap
-    pdf.set_xy(margin, critical_table_y_pos - 6)  # Slightly above the table
-    pdf.cell(full_width, 6, "Critical Moments Table", align="C")  # Centered title
-    pdf.add_matplotlib_figure(critical_table, x=margin, y=y_pos, w=full_width, h=row_height)
+
+    y_pos += 6  # Reduce spacing before the table
+    pdf.add_matplotlib_figure(season_table, x=margin, y=y_pos, w=full_width, h=17)
+    y_pos += row_height + 2  # Reduce spacing before the next section
+
+    ### **Step 4: Adjust Position of Critical Moments Table**
+    y_pos -= 22
+    pdf.set_xy(margin, y_pos - 1)  # Title closer to table
+    pdf.set_font("Courier", "B", 14)
+    pdf.cell(full_width, 8, "Critical Moments Table", align="C")
+
+    y_pos += 12  # Reduce spacing before the table
+    pdf.add_matplotlib_figure(critical_table, x=margin, y=y_pos, w=full_width, h=row_height+8)
+    y_pos += row_height + 3  # Reduce final spacing before footer
 
 
     #Save and Upload PDF
-    output_path = f"hitter_report_{hitter_name.replace(' ', '_')}_{game_date}.pdf"
+    output_path = f"/Users/joshsteckler/PycharmProjects/baseball-mvp/scripts/Hitter_Report_Card/Visualizations/Report_Card_Outputs/hitter_report_{hitter_name.replace(' ', '_')}_{game_date}.pdf"
     pdf.output(output_path)
     print(f"Report saved locally as {output_path}")
 
     s3_client = boto3.client("s3")
-    s3_client.upload_file(output_path, S3_BUCKET, f"hitter_report_cards/{output_path}")
-    print(f"Report uploaded to s3://{S3_BUCKET}/hitter_report_cards/{output_path}")
+    filename = os.path.basename(output_path)  # e.g. hitter_report_Julio_Rodríguez_2025-03-29.pdf
+    clean_filename = remove_accents(filename)
+    s3_key = f"hitter_report_cards/{clean_filename}"
+    s3_client = boto3.client("s3")
+    s3_client.upload_file(output_path, S3_BUCKET, s3_key)
+    s3_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
+    print(f"Report uploaded to {s3_url}")
 
-    output_path = f"hitter_report_{hitter_name.replace(' ', '_')}_{game_date}.pdf"
-    pdf.output(output_path)
+    return s3_url
 
-    # Open the PDF locally for quick review
-    webbrowser.open(output_path)
-
-    print(f"Report saved locally as {output_path}")
 
 # Example Run
 if __name__ == "__main__":
-    generate_hitter_report_pdf(player_id="663728", game_date="2024-09-29")
+    generate_hitter_report_pdf(player_id="596019", game_date="2025-04-21")

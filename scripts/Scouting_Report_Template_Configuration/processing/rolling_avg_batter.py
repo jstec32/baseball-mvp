@@ -26,9 +26,9 @@ SELECT
         WHEN events NOT IN ('walk', 'hit_by_pitch', 'sacrifice', 'catcher_interference', 'intent_walk', 'null') THEN 1 ELSE 0
     END AS at_bat
 FROM pitch_data
-WHERE batter_id = %s
-    AND game_date >= '2024-01-01'
-    AND game_date <= '2024-12-31'
+WHERE batter_id = '%s'
+    AND game_date >= '2025-01-01'
+    AND game_date <= '2025-12-31'
 ORDER BY game_date;
 """
 
@@ -57,6 +57,7 @@ def fetch_rolling_averages_data(hitter_id):
 
 def compute_rolling_averages_from_db(hitter_id, rolling_window=15):
     # Fetch data from the database
+
     pitch_data = fetch_rolling_averages_data(hitter_id)
 
     if pitch_data is None or pitch_data.empty:
@@ -118,7 +119,7 @@ def plot_rolling_averages_for_pdf(hitter_id, rolling_avg_data, return_fig=False)
             ax.plot(rolling_avg_data["game_date"], rolling_avg_data[stat], label=label, color=color, linewidth=2)
 
     # Customize plot
-    ax.set_title(f"{player_name}'s Rolling Averages (2024 Season)", fontsize=16, weight="bold")
+    ax.set_title(f"{player_name}'s Rolling Averages (2025 Season)", fontsize=16, weight="bold")
     ax.set_xlabel("Game Date", fontsize=12)
     ax.set_ylabel("Statistic Value", fontsize=12)
     ax.legend(title="Metrics", fontsize=10)

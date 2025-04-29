@@ -24,6 +24,7 @@ def fetch_hitter_stats(start_year, end_year, qual=50):
         data = batting_stats(year, qual=qual)
         data['Season'] = year
         all_data.append(data)
+        print(data.columns)
     return pd.concat(all_data, ignore_index=True)
 
 
@@ -73,49 +74,80 @@ def save_to_csv(data, file_path):
     print(f"Data saved to {file_path}")
 
 
-# Insert data into PostgreSQL
 def insert_data_to_db(data):
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
+        columns = [
+            "idfg", "season", "name", "team", "age", "games", "plate_appearances", "at_bats", "hits", "doubles",
+            "triples", "home_runs", "runs", "rbi","bb_percent", "k_percent", "walks", "strikeouts", "stolen_bases", "caught_stealing",
+            "batting_average", "on_base_percentage", "slugging_percentage", "ops", "wrc_plus", "iso",
+            "babip", "ld_percent", "gb_percent", "fb_percent", "hard_hit_percent"
+        ]
 
-        for _, row in data.iterrows():
+        for _, row in data[columns].iterrows():
             query = """
             INSERT INTO hitter_season_statistics (
                 idfg, season, name, team, age, games, plate_appearances, at_bats, hits, doubles,
-                triples, home_runs, runs, rbi, walks, strikeouts, stolen_bases, caught_stealing,
+                triples, home_runs, runs, rbi,bb_percent,k_percent, walks, strikeouts, stolen_bases, caught_stealing,
                 batting_average, on_base_percentage, slugging_percentage, ops, wrc_plus, iso,
                 babip, ld_percent, gb_percent, fb_percent, hard_hit_percent
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,%s,%s)
+            ON CONFLICT (idfg, season) DO UPDATE SET
+                name = EXCLUDED.name,
+                team = EXCLUDED.team,
+                age = EXCLUDED.age,
+                games = EXCLUDED.games,
+                plate_appearances = EXCLUDED.plate_appearances,
+                at_bats = EXCLUDED.at_bats,
+                hits = EXCLUDED.hits,
+                doubles = EXCLUDED.doubles,
+                triples = EXCLUDED.triples,
+                home_runs = EXCLUDED.home_runs,
+                runs = EXCLUDED.runs,
+                rbi = EXCLUDED.rbi,
+                bb_percent = EXCLUDED.bb_percent,
+                k_percent = EXCLUDED.k_percent,
+                walks = EXCLUDED.walks,
+                strikeouts = EXCLUDED.strikeouts,
+                stolen_bases = EXCLUDED.stolen_bases,
+                caught_stealing = EXCLUDED.caught_stealing,
+                batting_average = EXCLUDED.batting_average,
+                on_base_percentage = EXCLUDED.on_base_percentage,
+                slugging_percentage = EXCLUDED.slugging_percentage,
+                ops = EXCLUDED.ops,
+                wrc_plus = EXCLUDED.wrc_plus,
+                iso = EXCLUDED.iso,
+                babip = EXCLUDED.babip,
+                ld_percent = EXCLUDED.ld_percent,
+                gb_percent = EXCLUDED.gb_percent,
+                fb_percent = EXCLUDED.fb_percent,
+                hard_hit_percent = EXCLUDED.hard_hit_percent
+            ;
             """
             cursor.execute(query, tuple(row))
 
         conn.commit()
         cursor.close()
         conn.close()
-        print("Data inserted into database successfully.")
+        print("Hitter season stats upserted successfully.")
     except Exception as e:
         print(f"Error inserting data: {e}")
 
 
+
 # Main function
-def main():
+def main_hitter_season_stats():
     output_csv_path = "/Users/joshsteckler/PycharmProjects/baseball-mvp/docs/hitter_season_statistics_2024.csv"
 
-    # Fetch data
+    # grab data, filter, then save
     hitter_data = fetch_hitter_stats(2025, 2025, qual=1)
-
-    # Filter data
     filtered_data = filter_columns(hitter_data)
-
-    # Save to CSV
     save_to_csv(filtered_data, output_csv_path)
-
-    # Insert into database
     insert_data_to_db(filtered_data)
 
 
 if __name__ == "__main__":
-    main()
+    main_hitter_season_stats()
 
 

@@ -65,7 +65,8 @@ most_recent_season AS (
     SELECT MAX(hs.season) AS season
     FROM hitter_season_statistics hs
     JOIN players_with_team pwt
-        ON CONCAT(pwt."First_Name", ' ', pwt."Last_Name") = hs.name
+        ON unaccent(LOWER(TRIM(CONCAT(pwt."First_Name", ' ', pwt."Last_Name")))) =
+           unaccent(LOWER(TRIM(hs.name)))
     WHERE pwt.key_mlbam = %s
 )
 SELECT 
@@ -82,7 +83,8 @@ SELECT
     pwt.team_name
 FROM hitter_season_statistics hs
 JOIN players_with_team pwt
-    ON CONCAT(pwt."First_Name", ' ', pwt."Last_Name") = hs.name
+    ON unaccent(LOWER(TRIM(CONCAT(pwt."First_Name", ' ', pwt."Last_Name")))) =
+       unaccent(LOWER(TRIM(hs.name)))
 JOIN most_recent_season mrs
     ON hs.season = mrs.season
 WHERE pwt.key_mlbam = %s;
@@ -112,7 +114,8 @@ def fetch_hitter_stats_and_team(key_mlbam):
 
         cursor.close()
         conn.close()
-
+        print(data)
+        print(key_mlbam)
         # Check if we successfully retrieved hitter data
         if not data:
             print(f" No season stats found for hitter ID: {key_mlbam}")
@@ -154,24 +157,31 @@ def visualize_recent_hitter_stats_table(data, team_name: str, hitter_name: str, 
     for column in percentage_columns:
         if column in data.columns:
             data[column] = (data[column] * 100).round(2).astype(str) + '%'
+    header_renames = {
+        "HHR": "HH%",
+        "KR": "K%",
+        "BBR": "BB%",
+        "HRS":"HR"
+    }
+    data.columns = [header_renames.get(col, col) for col in data.columns]
 
     if "OPS" in data.columns:
         data["OPS"] = data["OPS"].round(3)
     if "BA" in data.columns:
         data["BA"] = data["BA"].round(3)
 
-    fig, ax = plt.subplots(figsize=(10, 2))
+    fig, ax = plt.subplots(figsize=(10, 0.9))
     ax.axis('off')
 
     table = ax.table(
         cellText=data.values,
         colLabels=data.columns,
         cellLoc='center',
-        loc='center'
+        bbox=[0, 0, 1, 1]
     )
 
     table.auto_set_font_size(False)
-    table.set_fontsize(10)
+    table.set_fontsize(12)
 
     for (i, j), cell in table.get_celld().items():
         cell.set_text_props(fontname="Courier")
@@ -186,8 +196,8 @@ def visualize_recent_hitter_stats_table(data, team_name: str, hitter_name: str, 
         else:
             cell.set_facecolor("white")
 
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0)
-
+    plt.rcParams['pdf.fonttype'] = 42  # TrueType
+    plt.rcParams['ps.fonttype'] = 42
     if return_fig:
         return fig
     else:
@@ -205,9 +215,5 @@ def generate_hitter_season_stats_visual(key_mlbam):
     print(f"Fetched stats for {hitter_name} ({team_name}).")
 
     fig = visualize_recent_hitter_stats_table(stats_df, team_name, hitter_name, return_fig=True)
-
+    plt.show()
     return fig, hitter_name, team_name
-
-
-
-

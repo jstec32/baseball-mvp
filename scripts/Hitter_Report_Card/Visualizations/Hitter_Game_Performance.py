@@ -25,12 +25,12 @@ def fetch_player_name(player_id):
         print(f"Error fetching player name: {e}")
         return None
 
-# Load .env file for AWS and DB credentials
+# Load .env.local file for AWS and DB credentials
 load_dotenv()
 
 # S3 Configuration
-S3_BUCKET = "scouting-reports-bucket"  # Set your bucket name here
-S3_KEY = "mlb_game_data/box_scores_2024.csv"
+S3_BUCKET = "baseball-data-mvp"  # Set your bucket name here
+S3_KEY = "mlb_game_data/box_scores_2025.csv"
 
 # Database Configuration
 DB_CONFIG = {
@@ -191,8 +191,7 @@ def visualize_hitter_game_performance_table(player_game_summary: pd.DataFrame, h
     player_game_data = player_game_data.drop('TEAM', axis=1)
     # Set up figure and axis with dynamic width based on columns count
     fig_width = max(8, len(columns_to_display) * 1.2)  # Scale width dynamically
-    fig, ax = plt.subplots(figsize=(fig_width, 2))  # Slightly taller to fit banner and table
-
+    fig, ax = plt.subplots(figsize=(fig_width, 0.9))  # Slightly taller to fit banner and table
     ax.axis('off')  # Hide regular plot axes
 
 
@@ -203,12 +202,12 @@ def visualize_hitter_game_performance_table(player_game_summary: pd.DataFrame, h
         cellText=player_game_data.values,
         colLabels=player_game_data.columns,
         cellLoc='center',
-        loc='center'
+        bbox=[0, 0, 1, 1]
     )
 
     # Adjust font size to fit dynamically
     table.auto_set_font_size(False)
-    table.set_fontsize(10)
+    table.set_fontsize(12)
 
     for (i, j), cell in table.get_celld().items():
         cell.set_text_props(fontname="Courier")
@@ -225,8 +224,8 @@ def visualize_hitter_game_performance_table(player_game_summary: pd.DataFrame, h
             cell.set_facecolor("white")
 
     # Tighten layout
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0)
-
+    plt.rcParams['pdf.fonttype'] = 42  # TrueType
+    plt.rcParams['ps.fonttype'] = 42
     if return_fig:
         return fig
     else:
@@ -251,8 +250,8 @@ def generate_hitter_game_performance_visual(player_id, game_pk):
     # Generate and return the visualization
     fig = visualize_hitter_game_performance_table(player_game_table, player_name, return_fig=True)
 
+
     return fig
 
-generate_hitter_game_performance_visual("621566", "745158")
 
 

@@ -9,7 +9,7 @@ people_path = "/docs/People.csv"  # Update with your file path
 fielding_data = pd.read_csv(fielding_path,encoding='latin1')
 people_data = pd.read_csv(people_path, encoding='latin1')
 
-fielding_filtered = fielding_data[fielding_data['yearID'].between(2020, 2023)]
+fielding_filtered = fielding_data[fielding_data['yearID'].between(2024, 2024)]
 
 fielding_filtered = fielding_filtered.sort_values(by=['playerID', 'G'], ascending=[True, False])
 
