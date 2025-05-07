@@ -154,5 +154,3 @@ def generate_reports_for_top_hitters(top_10_df, target_date=None):
         except Exception as e:
             print(f"Error generating report for {row['name']}: {e}")
 
-
-run_top_performers_email_pipeline('2025-04-28')

@@ -43,12 +43,16 @@ def get_max_pitch_id():
 # --- STEP 1: Fetch Data ---
 def fetch_statcast_data_for_day(date_str):
     try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        start_date = (target_date - timedelta(days=1)).strftime("%Y-%m-%d")
+        end_date = date_str
+
         url = (
             f"https://baseballsavant.mlb.com/statcast_search/csv?"
             f"all=true&type=details&player_type=pitcher"
-            f"&game_date_gt={date_str}&game_date_lt={date_str}"
+            f"&game_date_gt={start_date}&game_date_lt={target_date}"
         )
-
+        print(url)
         headers = {
             "User-Agent": "Mozilla/5.0"
         }
@@ -62,6 +66,12 @@ def fetch_statcast_data_for_day(date_str):
 
         if df.empty:
             return None, f"No data returned for {date_str}"
+
+        df["game_date"] = pd.to_datetime(df["game_date"])
+        df = df[df["game_date"].dt.date == target_date]
+
+        if df.empty:
+            return None, f"No records in Statcast data for exact date {date_str}"
 
         return df, None
 
@@ -208,6 +218,7 @@ def run_statcast_pipeline_for_date(target_date=None):
 
 
     raw_data, err = fetch_statcast_data_for_day(target_date)
+
     if err:
         log.append(f"Error fetching data: {err}")
         return log
@@ -257,50 +268,3 @@ def run_statcast_pipeline_for_date(target_date=None):
     write_log_to_s3(final_log, target_date)
 
     return log
-
-# --- MAIN RUN ---
-if __name__ == "__main__":
-    target_date = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    log = [f"Statcast pipeline run for {target_date}"]
-
-    raw_data, err = fetch_statcast_data_for_day(target_date)
-    if err:
-        log.append(err)
-    elif raw_data is not None:
-        df = process_statcast_data(raw_data)
-        df = add_balls_strikes(df)
-
-        # Ensure all required columns exist (fill with None if missing)
-        required_columns = [
-            'pitch_id', 'game_id', 'game_date', 'inning', 'inning_topbot',
-            'pitcher_id', 'batter_id', 'pitch_type', 'release_speed', 'release_spin_rate',
-            'release_pos_x', 'release_pos_y', 'release_pos_z', 'pfx_x', 'pfx_z',
-            'plate_x', 'plate_z', 'zone', 'events', 'description', 'launch_speed',
-            'launch_angle', 'hit_distance_sc', 'effective_speed', 'spin_axis', 'stand',
-            'p_throws', 'group', 'balls', 'strikes', 'count', 'hc_y', 'outs_when_up',
-            'hc_x', 'on_1b', 'woba_value', 'delta_run_exp', 'on_3b', 'on_2b',
-            'woba_denom', 'delta_home_win_exp'
-        ]
-
-        for col in required_columns:
-            if col not in df.columns:
-                df[col] = None
-        df = df[required_columns]
-        df = df.reset_index(drop=True)
-        start_id = get_max_pitch_id()
-        df["pitch_id"] = df.index + 1 + start_id
-
-        # Save locally to verify output before DB insert
-        output_path = f"statcast_pitch_data_{target_date}.csv"
-        df.to_csv(output_path, index=False)
-        print(f"CSV saved to {output_path}")
-        print(f"CSV saved to {output_path}")
-
-        db_error = insert_to_postgres(df)
-        log.append("Data inserted successfully." if not db_error else f"❌ {db_error}")
-    else:
-        log.append("Unknown error, no data returned.")
-
-    final_log = "\n".join(log)
-    print(final_log)
-    write_log_to_s3(final_log, target_date)

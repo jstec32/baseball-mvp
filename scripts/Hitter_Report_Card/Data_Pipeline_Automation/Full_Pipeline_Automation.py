@@ -14,7 +14,11 @@ import time
 
 # Specify your missing dates here
 missing_dates = [
-    "2025-04-28"
+    "2025-05-01",
+    "2025-05-02",
+    "2025-05-03",
+    "2025-05-04",
+    "2025-05-05"
 ]
 
 def process_data_for_dates(dates):

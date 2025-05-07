@@ -67,7 +67,7 @@ def process_statcast_data(data):
             "pfx_x", "pfx_z", "plate_x", "plate_z", "zone", "events", "description", "launch_speed",
             "launch_angle", "hit_distance_sc", "effective_speed", "spin_axis", "stand", "p_throws", "on_3b","on_2b","on_1b","outs_when_up"
         ]
-
+        print(data_renamed.columns)
         # Remove duplicate columns and select relevant ones
         data_filtered = data_renamed.loc[:, ~data_renamed.columns.duplicated()][columns_to_keep]
 
@@ -119,8 +119,8 @@ def fetch_statcast_data_by_month(start_date, end_date):
             current_month = current_date.month
 
 # Specify the date range
-start_date = "2024-08-01"
-end_date = "2024-11-01"
+start_date = "2025-03-21"
+end_date = "2025-03-22"
 
 # Fetch and save data for each month in the range
 fetch_statcast_data_by_month(start_date, end_date)

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # MLB API Endpoint
-MLB_API_URL = "http://statsapi.mlb.com/api/v1/schedule/games/?sportId=1&startDate=2024-03-28&endDate=2024-09-29"
+MLB_API_URL = "http://statsapi.mlb.com/api/v1/schedule/games/?sportId=1&startDate=2022-03-28&endDate=2022-09-29"
 
 
 # Fetch game data
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     game_df = fetch_mlb_game_data()
 
     if game_df is not None:
-        csv_filename = "mlb_game_data.csv"
+        csv_filename = "mlb_game_data_2022.csv"
         save_to_csv(game_df, csv_filename)
 
         # (Optional) Upload to S3
