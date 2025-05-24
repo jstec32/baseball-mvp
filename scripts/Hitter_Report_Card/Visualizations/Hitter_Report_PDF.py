@@ -547,4 +547,4 @@ def generate_hitter_report_pdf(player_id, game_date):
 
 # Example Run
 if __name__ == "__main__":
-    generate_hitter_report_pdf(player_id="596019", game_date="2025-04-21")
+    generate_hitter_report_pdf(player_id="671218", game_date="2025-05-06")

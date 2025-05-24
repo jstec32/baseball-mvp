@@ -1,5 +1,6 @@
 from datetime import time
 
+from Query_Generator.Scripts.pitcher_season_stats import main_pitcher_season_stats
 from scripts.Hitter_Report_Card.Data_Pipeline_Automation.Hitter_Season_Stats_Automated import main_hitter_season_stats
 from scripts.Hitter_Report_Card.Data_Pipeline_Automation.Pitch_Data_Daily_Ingestion import \
     run_statcast_pipeline_for_date
@@ -14,11 +15,8 @@ import time
 
 # Specify your missing dates here
 missing_dates = [
-    "2025-05-01",
-    "2025-05-02",
-    "2025-05-03",
-    "2025-05-04",
-    "2025-05-05"
+    "2025-05-20",
+    "2025-05-21"
 ]
 
 def process_data_for_dates(dates):
@@ -51,6 +49,8 @@ def process_data_for_dates(dates):
             time.sleep(20)
             run_top_performers_email_pipeline(date_str)
             log.append(f"Top performers email/report sent for {date_str}")
+            today = datetime.today().year
+            main_pitcher_season_stats(2025, 2025, "pitcher_season_stats_2025.csv")
 
     except Exception as e:
         log.append(f"Error during backfill pipeline: {e}")
