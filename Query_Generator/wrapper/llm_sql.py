@@ -1,5 +1,7 @@
 import os
 import json
+from string import Template
+
 import boto3
 import sqlparse
 import psycopg2
@@ -36,19 +38,26 @@ llm_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 class SQLSandbox:
     def __init__(self):
+        # 1) load the schema as before
         self.schema = load_schema_from_s3()
 
+        # 2) load *your* template file from the exact path you saved it
+        #    adjust this path to wherever you put sql_generation.txt
+        tpl_path = Path("/Users/joshsteckler/PycharmProjects/baseball-mvp/Query_Generator/wrapper") \
+                      / "sql_generation.txt"
+        tpl_text = tpl_path.read_text()
+        self.template = Template(tpl_text)
+
     def ask_sql(self, user_q: str) -> str:
-        schema_str = json.dumps(self.schema)
-        prompt = (
-            f"You are a SQL generator. Only use these tables and columns. Columns used in the sql statement must exist in the following tables given here:\n{schema_str}\n\n"
-            f"Generate a single, read-only SELECT statement (no semicolons, no comments) to answer. Ensure you use consistent structure in all of your responses and statements should be the same result everytime.:\n\"{user_q}\""
-        )
+        # render the Jinja template with your schema + question
+        schema_str = json.dumps(self.schema, indent=2)
+        prompt     = self.template.render(schema=schema_str, user_query=user_q)
+
         resp = llm_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "system", "content": prompt}]
         )
-        # strip any backticks or quotes
+
         raw_sql = resp.choices[0].message.content
         print("\n=== LLM raw response ===\n", raw_sql, "\n=== end raw response ===\n")
         return raw_sql.strip().strip("```sql").strip("```")
@@ -95,6 +104,6 @@ class SQLSandbox:
 # Quick manual test
 if __name__ == "__main__":
     sandbox = SQLSandbox()
-    example = "Show me Gerrit Cole's monthly ERA during the 2025 season."
+    example = "Show me Tarik Skubal's monthly ERA during the 2025 season."
     result  = sandbox.run(example)
     print(json.dumps(result, indent=2))
