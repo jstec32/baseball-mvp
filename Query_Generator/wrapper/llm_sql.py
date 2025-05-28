@@ -1,7 +1,7 @@
 import os
 import json
-from string import Template
-
+from pathlib import Path
+from jinja2 import Template
 import boto3
 import sqlparse
 import psycopg2
@@ -37,73 +37,109 @@ DB_CONFIG = {
 llm_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 class SQLSandbox:
-    def __init__(self):
-        # 1) load the schema as before
+    def __init__(self, template_path: str):
         self.schema = load_schema_from_s3()
-
-        # 2) load *your* template file from the exact path you saved it
-        #    adjust this path to wherever you put sql_generation.txt
-        tpl_path = Path("/Users/joshsteckler/PycharmProjects/baseball-mvp/Query_Generator/wrapper") \
-                      / "sql_generation.txt"
-        tpl_text = tpl_path.read_text()
+        tpl_text    = Path(template_path).read_text()
         self.template = Template(tpl_text)
 
     def ask_sql(self, user_q: str) -> str:
-        # render the Jinja template with your schema + question
-        schema_str = json.dumps(self.schema, indent=2)
-        prompt     = self.template.render(schema=schema_str, user_query=user_q)
-
+        prompt = self.template.render(
+            schema     = json.dumps(self.schema, indent=2),
+            user_query = user_q
+        )
         resp = llm_client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": prompt}]
+            messages=[{"role":"system","content":prompt}]
         )
-
         raw_sql = resp.choices[0].message.content
         print("\n=== LLM raw response ===\n", raw_sql, "\n=== end raw response ===\n")
         return raw_sql.strip().strip("```sql").strip("```")
 
+    def modify_sql(self, prev_sql: str, edit_instruction: str) -> str:
+        """
+        Take an existing SELECT and modify it per the user's follow-up.
+        """
+        patch_prompt = (
+            f"Here is an existing SQL query:\n{prev_sql}\n\n"
+            f"Modify it so that it also {edit_instruction}.\n"
+            "Only output the new, valid SELECT statement."
+        )
+        resp = llm_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role":"system","content":patch_prompt}]
+        )
+        patch_sql = resp.choices[0].message.content
+        return patch_sql.strip().strip("```sql").strip("```")
+
     def validate_sql(self, sql: str):
-        # Must be a single statement
         parsed = sqlparse.parse(sql)
         if len(parsed) != 1:
             raise ValueError("Only one SQL statement is allowed.")
         stmt = parsed[0]
-        # Must be a SELECT
         if stmt.get_type().upper() != "SELECT":
             raise ValueError("Only SELECT queries are allowed.")
-        forbidden = {"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE"}
-        tokens = [t for t in stmt.tokens if t.ttype is None]  # identifiers & keywords
+        forbidden = {"INSERT","UPDATE","DELETE","DROP","ALTER","CREATE"}
         text = stmt.value.upper()
         for kw in forbidden:
             if kw in text:
                 raise ValueError(f"Forbidden keyword in query: {kw}")
         return True
 
-    def run(self, user_q: str, output_format: str = "json"):
-        sql = self.ask_sql(user_q)
-        self.validate_sql(sql)
-
+    def execute(self, sql: str):
         conn = psycopg2.connect(**DB_CONFIG)
         cur  = conn.cursor()
         cur.execute(sql)
         rows    = cur.fetchall()
-        columns = [desc[0] for desc in cur.description]
+        cols    = [d[0] for d in cur.description]
         cur.close()
         conn.close()
+        return cols, rows
+
+    def run(self, user_q: str, output_format: str = "json"):
+        raise RuntimeError("Use ChatSession for multi-turn. For single statements, call .execute() directly.")
+
+class ChatSession:
+    def __init__(self, template_path: str):
+        self.sb      = SQLSandbox(template_path)
+        self.history = []  # each entry is {"sql":..., "cols":..., "rows":...}
+
+    def query(self, user_q: str, output_format: str = "json"):
+        # first turn = generate; next turns = patch
+        if not self.history:
+            sql = self.sb.ask_sql(user_q)
+        else:
+            prev_sql = self.history[-1]["sql"]
+            sql      = self.sb.modify_sql(prev_sql, user_q)
+
+        self.sb.validate_sql(sql)
+        cols, rows = self.sb.execute(sql)
+        self.history.append({"sql":sql,"cols":cols,"rows":rows})
 
         if output_format == "csv":
             import io, csv
-            buf = io.StringIO()
+            buf    = io.StringIO()
             writer = csv.writer(buf)
-            writer.writerow(columns)
+            writer.writerow(cols)
             writer.writerows(rows)
             return buf.getvalue()
 
-        return {"sql": sql, "columns": columns, "rows": rows}
+        return {"sql":sql,"columns":cols,"rows":rows}
 
-# Quick manual test
 if __name__ == "__main__":
-    sandbox = SQLSandbox()
-    example = "Show me Tarik Skubal's monthly ERA during the 2025 season."
-    result  = sandbox.run(example)
-    print(json.dumps(result, indent=2))
+    import pandas as pd
+
+    prompt_file = "/Users/joshsteckler/PycharmProjects/baseball-mvp/Query_Generator/wrapper/sql_generation.txt"
+    session     = ChatSession(prompt_file)
+
+    print("Welcome to the SQL chat. Type your question, or ‘quit’ to exit.")
+    while True:
+        user_q = input("You ▶ ")
+        if user_q.lower() in ("quit","exit"):
+            break
+
+        result = session.query(user_q)
+        # build a dataframe from the latest result
+        df = pd.DataFrame(result["rows"], columns=result["columns"])
+        print("\nResult:\n")
+        print(df.to_string(index=False))
+        print("\n")
