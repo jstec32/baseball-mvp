@@ -133,33 +133,40 @@ def fetch_player_headshot(hitter_id):
 def fetch_critical_moments(game_id, mlb_game_data):
     query = """
         WITH player_with_team AS (
-            SELECT 
-                p.key_mlbam,
-                CONCAT(p."First_Name", ' ', p."Last_Name") AS player_name,
-                t.name AS team_name
-            FROM players p
-            JOIN teams t
-                ON p."teamID" = t.abbreviation_players
-        )
-        SELECT 
-            pwt.player_name AS batter_name,
-            pwt.team_name,
-            inning, 
-            inning_topbot, 
-            pitch_type, 
-            delta_run_exp::NUMERIC AS leverage_value, 
-            ABS(delta_run_exp::NUMERIC) AS leverage_impact, 
-            events,
-            launch_angle,
-            hit_distance_sc, 
-            launch_speed
-        FROM pitch_data pd
-        JOIN player_with_team pwt
-            ON pd.batter_id = pwt.key_mlbam
-        WHERE pd.game_id = %s
-        ORDER BY leverage_impact DESC
-        LIMIT 5;
-        """
+    SELECT 
+        p.key_mlbam,
+        CONCAT(p."First_Name", ' ', p."Last_Name") AS player_name,
+        t.name AS team_name
+    FROM players p
+    JOIN teams t
+        ON p."teamID" = t.abbreviation_players
+)
+SELECT 
+    pwt.player_name AS batter_name,
+    pwt.team_name,
+    inning, 
+    inning_topbot, 
+    pitch_type, 
+    CASE 
+        WHEN pd.delta_run_exp ~ '^[-+]?[0-9]*\.?[0-9]+$' 
+        THEN pd.delta_run_exp::NUMERIC 
+        ELSE NULL 
+    END AS leverage_value,
+    CASE 
+        WHEN pd.delta_run_exp ~ '^[-+]?[0-9]*\.?[0-9]+$' 
+        THEN ABS(pd.delta_run_exp::NUMERIC) 
+        ELSE NULL 
+    END AS leverage_impact,
+    events,
+    launch_angle,
+    hit_distance_sc, 
+    launch_speed
+FROM pitch_data pd
+JOIN player_with_team pwt
+    ON pd.batter_id = pwt.key_mlbam
+WHERE pd.game_id = %s
+ORDER BY leverage_impact DESC
+LIMIT 5;"""
 
     connection = get_db_connection()
     if not connection:
@@ -172,10 +179,34 @@ def fetch_critical_moments(game_id, mlb_game_data):
         columns = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(results, columns=columns)
 
-        # Fetch and add player IDs
-        df["player_id"] = df["batter_name"].apply(lambda name: fetch_player_id(name, game_id, mlb_game_data))
+        if df.empty:
+            print(f" No critical moments found for game {game_id}")
+            return None
 
-        return df
+        df["leverage_value"] = pd.to_numeric(df["leverage_value"], errors="coerce")
+        valid_rows = df[df["leverage_value"].notnull()]
+
+        # Fallback logic if fewer than 5
+        if len(valid_rows) < 5:
+            fallback_query = query.replace("LIMIT 5", "LIMIT 15")
+            cursor.execute(fallback_query, (game_id,))
+            fallback_results = cursor.fetchall()
+            fallback_df = pd.DataFrame(fallback_results, columns=columns)
+
+            fallback_df["leverage_value"] = pd.to_numeric(fallback_df["leverage_value"], errors="coerce")
+
+            # Combine and drop blanks explicitly
+            combined_df = pd.concat([valid_rows, fallback_df], ignore_index=True)
+            combined_df = combined_df[combined_df["leverage_value"].notnull()]
+            combined_df = combined_df.drop_duplicates().head(5)
+            valid_rows = combined_df
+
+        # Add player_id column
+        valid_rows["player_id"] = valid_rows["batter_name"].apply(
+            lambda name: fetch_player_id(name, game_id, mlb_game_data)
+        )
+
+        return valid_rows.reset_index(drop=True)
 
     except Exception as e:
         print(f" Error fetching critical moments: {e}")
@@ -183,6 +214,7 @@ def fetch_critical_moments(game_id, mlb_game_data):
 
     finally:
         connection.close()
+
 
 
 def visualize_critical_moments_table(data, team_name, game_id, return_fig=False):
@@ -193,8 +225,6 @@ def visualize_critical_moments_table(data, team_name, game_id, return_fig=False)
     # Format columns
     if "launch_angle" in data.columns:
         data["launch_angle"] = data["launch_angle"].round(1)
-    if "leverage_value" in data.columns:
-        data["leverage_value"] = data["leverage_value"].round(2)
     if "events" in data.columns:
         data["events"] = data["events"].str.replace("_", " ").str.title()
 
@@ -257,6 +287,7 @@ def visualize_critical_moments_table(data, team_name, game_id, return_fig=False)
                 table[row_index, col_index].set_facecolor("#f2f2f2")
 
     # Color-code leverage column
+    data["leverage_value"] = pd.to_numeric(data["leverage_value"], errors="coerce").fillna(0).round(2)
     leverage_column = "Leverage"
     leverage_col_index = col_labels.index(leverage_column)
     for row_index in range(1, len(data) + 1):
@@ -298,32 +329,40 @@ def generate_critical_moments_visual(game_id):
     # Fetch critical moments
     query = """
         WITH player_with_team AS (
-            SELECT 
-                p.key_mlbam,
-                CONCAT(p."First_Name", ' ', p."Last_Name") AS player_name,
-                t.name AS team_name
-            FROM players p
-            JOIN teams t
-                ON p."teamID" = t.abbreviation_players
-        )
-        SELECT 
-            pwt.player_name AS batter_name,
-            pwt.team_name,
-            inning, 
-            inning_topbot, 
-            pitch_type, 
-            delta_run_exp::NUMERIC AS leverage_value, 
-            ABS(delta_run_exp::NUMERIC) AS leverage_impact, 
-            events,
-            launch_angle,
-            hit_distance_sc, 
-            launch_speed
-        FROM pitch_data pd
-        JOIN player_with_team pwt
-            ON pd.batter_id = pwt.key_mlbam
-        WHERE pd.game_id = %s
-        ORDER BY leverage_impact DESC
-        LIMIT 5;
+    SELECT 
+        p.key_mlbam,
+        CONCAT(p."First_Name", ' ', p."Last_Name") AS player_name,
+        t.name AS team_name
+    FROM players p
+    JOIN teams t
+        ON p."teamID" = t.abbreviation_players
+)
+SELECT 
+    pwt.player_name AS batter_name,
+    pwt.team_name,
+    inning, 
+    inning_topbot, 
+    pitch_type, 
+    CASE 
+        WHEN pd.delta_run_exp ~ '^[-+]?[0-9]*\.?[0-9]+$' 
+        THEN pd.delta_run_exp::NUMERIC 
+        ELSE NULL 
+    END AS leverage_value,
+    CASE 
+        WHEN pd.delta_run_exp ~ '^[-+]?[0-9]*\.?[0-9]+$' 
+        THEN ABS(pd.delta_run_exp::NUMERIC) 
+        ELSE NULL 
+    END AS leverage_impact,
+    events,
+    launch_angle,
+    hit_distance_sc, 
+    launch_speed
+FROM pitch_data pd
+JOIN player_with_team pwt
+    ON pd.batter_id = pwt.key_mlbam
+WHERE pd.game_id = %s AND pd.delta_run_exp ~ '^[-+]?[0-9]*\\.?[0-9]+$'
+ORDER BY leverage_impact DESC
+LIMIT 5;
     """
 
     connection = get_db_connection()

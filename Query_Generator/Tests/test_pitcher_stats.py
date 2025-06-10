@@ -1,11 +1,13 @@
+import datetime
+
 from scripts.Hitter_Report_Card.Data_Pipeline_Automation.Pitch_Data_Daily_Ingestion import get_max_pitch_id, \
-    add_balls_strikes, process_statcast_data
+    add_balls_strikes, process_statcast_data, fetch_statcast_data_for_day
 
 
 def run_statcast_pipeline_for_date(target_date=None):
 
     if target_date is None:
-        target_date = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+        target_date = (datetime.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
     log = [f"Statcast pipeline run for {target_date}"]
 

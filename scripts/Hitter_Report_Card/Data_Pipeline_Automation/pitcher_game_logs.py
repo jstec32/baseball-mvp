@@ -136,14 +136,8 @@ def backfill_pitcher_game_logs(start_date: str, end_date: str):
 
 
 # At the top of the file, define your backfill window:
-BACKFILL_START = "2025-05-26"  # Opening Day 2025
-# You can also compute end dynamically:
-BACKFILL_END   = "2025-05-26"
+BACKFILL_START = "2025-06-05"
+BACKFILL_END = "2025-06-06"
 
-# … rest of imports & functions stay the same …
 
-if __name__ == "__main__":
-    # Always backfill the full range when you run this script
-    print(f"🔄 Backfilling from {BACKFILL_START} to {BACKFILL_END}")
-    backfill_pitcher_game_logs(BACKFILL_START, BACKFILL_END)
 

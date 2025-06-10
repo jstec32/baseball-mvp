@@ -1,6 +1,9 @@
 from datetime import time
 
 from Query_Generator.Scripts.pitcher_season_stats import main_pitcher_season_stats
+from Query_Generator.Scripts.team_game_stats import fetch_yesterday_team_stats_and_append_to_s3
+from Query_Generator.Scripts.team_record_generation import update_team_records, fetch_mlb_game_data, \
+    compute_team_records, upsert_team_records
 from scripts.Hitter_Report_Card.Data_Pipeline_Automation.Hitter_Season_Stats_Automated import main_hitter_season_stats
 from scripts.Hitter_Report_Card.Data_Pipeline_Automation.Pitch_Data_Daily_Ingestion import \
     run_statcast_pipeline_for_date
@@ -13,9 +16,11 @@ from scripts.Hitter_Report_Card.Data_Pipeline_Automation.game_score_pipeline imp
 from datetime import datetime, timedelta
 import time
 
+from scripts.Hitter_Report_Card.Data_Pipeline_Automation.pitcher_game_logs import backfill_pitcher_game_logs
+
 # Specify your missing dates here
 missing_dates = [
-    "2025-05-26",
+    "2025-06-09"
 ]
 
 def process_data_for_dates(dates):
@@ -49,7 +54,15 @@ def process_data_for_dates(dates):
             run_top_performers_email_pipeline(date_str)
             log.append(f"Top performers email/report sent for {date_str}")
             today = datetime.today().year
-            main_pitcher_season_stats(2025, 2025, "pitcher_season_stats_2025.csv")
+            main_pitcher_season_stats(2025, 2025)
+            backfill_pitcher_game_logs(date_str,date_str)
+            #process team records
+            df_games = fetch_mlb_game_data()
+            df_records = compute_team_records(df_games)
+            print("Computed team records (first few rows):")
+            print(df_records.head(), "\n")
+            upsert_team_records(df_records)
+            fetch_yesterday_team_stats_and_append_to_s3()
 
     except Exception as e:
         log.append(f"Error during backfill pipeline: {e}")
