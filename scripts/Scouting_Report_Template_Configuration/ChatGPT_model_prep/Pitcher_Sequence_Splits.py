@@ -1,6 +1,8 @@
 import pandas as pd
 import psycopg2
 import seaborn as sns
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 from sqlalchemy import create_engine

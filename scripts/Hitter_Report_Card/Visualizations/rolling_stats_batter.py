@@ -1,4 +1,6 @@
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import psycopg2
 from matplotlib.ticker import FuncFormatter
@@ -168,7 +170,7 @@ def plot_rolling_averages_for_pdf(hitter_id, rolling_avg_data, return_fig=False)
     if return_fig:
         return plt.gcf()  # Return the figure for inclusion in the PDF
     else:
-        plt.show()
+        plt.close(fig)
 
 
 
@@ -188,7 +190,7 @@ def generate_and_plot_rolling_averages(hitter_id, rolling_window=15, return_fig=
     if return_fig:
         return fig
     else:
-        plt.show()
+        plt.close(fig)
 
 def generate_rolling_averages_visual(hitter_id, rolling_window=15):
 

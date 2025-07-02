@@ -1,6 +1,8 @@
 import os
 import boto3
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import psycopg2
 from dotenv import load_dotenv
@@ -229,7 +231,7 @@ def visualize_hitter_game_performance_table(player_game_summary: pd.DataFrame, h
     if return_fig:
         return fig
     else:
-        plt.show()
+        plt.close(fig)
 
 
 def generate_hitter_game_performance_visual(player_id, game_pk):

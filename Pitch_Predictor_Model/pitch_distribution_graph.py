@@ -1,6 +1,8 @@
 import pandas as pd
 import os
 import glob
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -40,4 +42,4 @@ plt.xlabel("Pitch Type")
 plt.ylabel("Count")
 plt.title("Pitch Type Distribution in Dataset")
 plt.xticks(rotation=45)
-plt.show()
+plt.close(fig)

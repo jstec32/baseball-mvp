@@ -96,7 +96,16 @@ if __name__ == "__main__":
     print("All tables (CSV‑backed + Postgres) are now loaded into DuckDB.\n")
 
     user_sql = """
-SELECT DATE_TRUNC('month', game_date) AS month, ROUND(SUM(hits - homeRuns)::FLOAT / NULLIF(SUM(atBats - strikeOuts - homeRuns + sacFlies), 0), 3) AS babip FROM merged_pitch_box_scores_2025 WHERE name = 'Julio Rodríguez' AND game_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY DATE_TRUNC('month', game_date) ORDER BY month;
+ SELECT
+  game_id,
+  game_date,
+  home_team,
+  home_score,
+  away_team,
+  away_score
+FROM mlb_game_data_2025
+WHERE game_date::DATE = '2025-06-26'
+  AND ('Seattle Mariners' = home_team OR 'Seattle Mariners' = away_team) 
 
 """
 

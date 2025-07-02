@@ -3,6 +3,8 @@ import os
 import psycopg2
 import pandas as pd
 import seaborn as sns
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 from matplotlib.patches import Rectangle

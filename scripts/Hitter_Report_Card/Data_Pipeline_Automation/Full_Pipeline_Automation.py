@@ -19,9 +19,8 @@ import time
 from scripts.Hitter_Report_Card.Data_Pipeline_Automation.pitcher_game_logs import backfill_pitcher_game_logs
 
 # Specify your missing dates here
-missing_dates = [
-    "2025-06-09"
-]
+yesterday = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+missing_dates = [yesterday]
 
 def process_data_for_dates(dates):
     log = ["Starting Baseball MVP Data Backfill Pipeline"]

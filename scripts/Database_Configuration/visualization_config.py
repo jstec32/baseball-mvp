@@ -1,4 +1,6 @@
 # visualization_config.py
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 
 def apply_global_styles():

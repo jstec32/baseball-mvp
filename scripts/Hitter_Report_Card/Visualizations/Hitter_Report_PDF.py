@@ -330,6 +330,8 @@ def fetch_box_score_for_game_from_s3(game_id):
 
 from fpdf import FPDF, XPos, YPos
 from io import BytesIO, StringIO
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 
 
@@ -538,7 +540,10 @@ def generate_hitter_report_pdf(player_id, game_date):
     clean_filename = remove_accents(filename)
     s3_key = f"hitter_report_cards/{clean_filename}"
     s3_client = boto3.client("s3")
-    s3_client.upload_file(output_path, S3_BUCKET, s3_key)
+    s3_client.upload_file(output_path, S3_BUCKET, s3_key,ExtraArgs={
+        "ContentType": "application/pdf",
+        "ContentDisposition": "inline"
+    })
     s3_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
     print(f"Report uploaded to {s3_url}")
 

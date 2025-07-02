@@ -31,6 +31,7 @@ TABLES = [
     "pitcher_game_logs",
     "players",
     "teams",
+    "pitcher_season_statistics"
 ]
 
 # CSVs to include (logical name -> S3 key under mlb_game_data/)

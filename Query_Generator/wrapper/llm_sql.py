@@ -18,12 +18,33 @@ from datetime import datetime, timezone
 import json
 import io, csv
 import logging
-
+from io import StringIO
 
 # S3 & Schema
 S3_BUCKET = "baseball-data-mvp"
 S3_KEY    = "query_wrapper/2025_schema.json"
 os.environ["RUNNING_LOCALLY"] = "true"
+S3_LOG_BUCKET = "baseball-data-mvp"
+S3_LOG_KEY = "logs/query_logs.jsonl"
+
+def append_log_to_s3(entry: dict):
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_REGION", "us-east-1")
+    )
+    try:
+        obj = s3_client.get_object(Bucket=S3_LOG_BUCKET, Key=S3_LOG_KEY)
+        existing_logs = obj["Body"].read().decode("utf-8")
+    except s3_client.exceptions.NoSuchKey:
+        existing_logs = ""
+
+    with StringIO() as buffer:
+        if existing_logs:
+            buffer.write(existing_logs.rstrip("\n") + "\n")
+        buffer.write(json.dumps(entry) + "\n")
+        s3_client.put_object(Bucket=S3_LOG_BUCKET, Key=S3_LOG_KEY, Body=buffer.getvalue())
 
 def load_schema_from_s3() -> dict:
     s3 = boto3.client(
@@ -62,10 +83,25 @@ logging.getLogger(__name__).setLevel(logging.INFO)
 # OpenAI client
 llm_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+class SchemaValidator:
+    def __init__(self, schema_dict):
+        self.schema = schema_dict
+
+    def is_query_valid(self, sql: str) -> bool:
+        for table, allowed_columns in self.schema.items():
+            match = re.search(rf"{table}\s+AS\s+(\w+)", sql, re.IGNORECASE)
+            if not match:
+                continue
+            alias = match.group(1)
+            for col in re.findall(rf"{alias}\.(\w+)\b", sql):
+                if col not in allowed_columns:
+                    return False
+        return True
+
 class SQLSandbox:
     def __init__(self, template_path: str):
         # 1) load the dynamic schema and your Jinja prompt template
-        self.schema   = load_schema_from_s3()
+        self.schema = SchemaValidator(load_schema_from_s3())
         tpl_text      = Path(template_path).read_text()
         self.template = Template(tpl_text)
 
@@ -88,7 +124,7 @@ class SQLSandbox:
     def ask_sql(self, user_q: str) -> str:
 
         prompt = self.template.render(
-            schema     = json.dumps(self.schema, indent=2),
+            schema     = json.dumps(self.schema.schema, indent=2),
             user_query = user_q
         )
         resp = llm_client.chat.completions.create(
@@ -150,13 +186,12 @@ class SQLSandbox:
                     # 1b) fill any NaT with 2025‑04‑01
                     n_missing = df_csv["game_date"].isna().sum()
                     if n_missing:
-                        print(f"Info: filling {n_missing} missing game_date rows in '{tbl}' with 2025-04-01")
                         df_csv["game_date"].fillna(pd.Timestamp("2025-04-01"), inplace=True)
 
                 con.register(tbl, df_csv)
 
             # 2) pull your core Postgres tables into Pandas & register
-            for table in ["pitcher_game_logs", "hitter_season_statistics", "players", "teams"]:
+            for table in ["pitcher_game_logs", "hitter_season_statistics", "players", "teams","pitch_data","pitcher_season_statistics"]:
                 df = pd.read_sql(f"SELECT * FROM {table}", self.pg_engine)
                 con.register(table, df)
 
@@ -166,23 +201,49 @@ class SQLSandbox:
 
         # ——— Fallback: run in Postgres ———
         conn = psycopg2.connect(**DB_CONFIG)
-        cur  = conn.cursor()
-        cur.execute(sql)
-        rows = cur.fetchall()
-        cols = [desc[0] for desc in cur.description]
-        cur.close()
-        conn.close()
+        cur = conn.cursor()
+        try:
+            cur.execute(sql)
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cur.close()
+            conn.close()
         return cols, rows
 
 
 # ────── ChatSession for back and forth ──────
 logger = logging.getLogger(__name__)
 
+
+
 class ChatSession:
+    def _validate_schema(self, sql: str):
+        violations = []
+
+        for table, allowed_columns in self.schema.schema.items():
+            table_alias_match = re.search(rf"{table}\s+AS\s+(\w+)", sql, re.IGNORECASE)
+            if not table_alias_match:
+                continue
+
+            alias = table_alias_match.group(1)
+            column_pattern = re.compile(rf"{alias}\.(\w+)\b")
+
+            for col in column_pattern.findall(sql):
+                if col not in allowed_columns:
+                    violations.append(f"{alias}.{col} not in allowed columns of {table}")
+
+        if violations:
+            raise ValueError("Invalid columns: " + "; ".join(violations))
+
     def __init__(self, template_path: str):
         self.sb      = SQLSandbox(template_path)
         self.history = []
         self.last_q  = ""
+        self.schema = SchemaValidator(load_schema_from_s3())
 
     def _is_followup(self, last_q: str, user_q: str) -> bool:
         clf_prompt = f"""
@@ -225,18 +286,59 @@ Answer:
             "attempts": []
         }
 
-        # SQL generation
-        try:
-            sql = self.sb.modify_sql(self.history[-1]["sql"], user_q) if use_patch else self.sb.ask_sql(user_q)
-            self.sb.validate_sql(sql)
-        except Exception as ve:
-            entry["attempts"].append({"sql": sql, "error": str(ve)})
-            logger.info(json.dumps(entry))
-            return {
-                "success": False,
-                "error": "Sorry, I couldn’t generate a valid SQL query for that request.",
-                "attempts": entry["attempts"]
-            }
+        # SQL generation + schema validation with 1 retry
+        sql = ""
+        for attempt in (1, 2):
+            try:
+                if attempt == 1:
+                    sql = self.sb.modify_sql(self.history[-1]["sql"], user_q) if use_patch else self.sb.ask_sql(user_q)
+                else:
+                    sql = self.sb.modify_sql(sql, "Fix the query to only use valid columns and tables as per your prompt instructions.")
+                self.sb.validate_sql(sql)
+
+                # New: schema/table validation logic
+                if not self.sb.schema.is_query_valid(sql):
+                    err_msg = "SQL references invalid tables or columns."
+                    entry["attempts"].append({"sql": sql, "error": err_msg})
+                    clean_entry = {k: v for k, v in entry.items() if k != "schema"}
+                    logger.info(json.dumps(clean_entry))
+
+                    try:
+                        # Ask LLM to revise using schema violation prompt
+                        sql = self.sb.modify_sql(sql, f"Error: {err_msg}. Please fix the SQL.")
+                        self.sb.validate_sql(sql)
+
+                        if not self.sb.schema.is_query_valid(sql):
+                            raise ValueError("Second attempt still violates schema.")
+                    except Exception as patch_err:
+                        final_error = str(patch_err).split("\n", 1)[0]
+                        entry["attempts"].append({"sql": sql, "error": final_error})
+                        try:
+                            append_log_to_s3(entry)
+                        except Exception as e:
+                            logger.error(f"Failed to append logs to S3: {e}")
+                        return {
+                            "success": False,
+                            "error": "Sorry, I couldn’t generate a valid SQL query for that request.",
+                            "attempts": entry["attempts"]
+                        }
+                self._validate_schema(sql)
+                break
+            except Exception as ve:
+                err_msg = str(ve).split("\n", 1)[0]
+                entry["attempts"].append({"sql": sql, "error": err_msg})
+                if attempt == 2:
+                    clean_entry = {k: v for k, v in entry.items() if k != "schema"}
+                    logger.info(json.dumps(clean_entry))
+                    try:
+                        append_log_to_s3(entry)
+                    except Exception as e:
+                        logger.error(f"Failed to append logs to S3: {e}")
+                    return {
+                        "success": False,
+                        "error": "Sorry, I couldn’t generate a valid SQL query for that request.",
+                        "attempts": entry["attempts"]
+                    }
 
         # SQL execution with 1 retry
         cols, rows = [], []
@@ -259,6 +361,33 @@ Answer:
                     try:
                         sql = self.sb.modify_sql(sql, f"Error: {err_msg}. Please fix the SQL.")
                         self.sb.validate_sql(sql)
+
+                        # New: schema/table validation logic
+                        if not self.sb.schema.is_query_valid(sql):
+                            err_msg = "SQL references invalid tables or columns."
+                            entry["attempts"].append({"sql": sql, "error": err_msg})
+                            clean_entry = {k: v for k, v in entry.items() if k != "schema"}
+                            logger.info(json.dumps(clean_entry))
+
+                            try:
+                                # Ask LLM to revise using schema violation prompt
+                                sql = self.sb.modify_sql(sql, f"Error: {err_msg}. Please fix the SQL.")
+                                self.sb.validate_sql(sql)
+
+                                if not self.sb.schema.is_query_valid(sql):
+                                    raise ValueError("Second attempt still violates schema.")
+                            except Exception as patch_err:
+                                final_error = str(patch_err).split("\n", 1)[0]
+                                entry["attempts"].append({"sql": sql, "error": final_error})
+                                try:
+                                    append_log_to_s3(entry)
+                                except Exception as e:
+                                    logger.error(f"Failed to append logs to S3: {e}")
+                                return {
+                                    "success": False,
+                                    "error": "Sorry, I couldn’t generate a valid SQL query for that request.",
+                                    "attempts": entry["attempts"]
+                                }
                     except Exception as patch_err:
                         final_error = str(patch_err).split("\n", 1)[0]
                         entry["attempts"].append({"sql": sql, "error": final_error})
@@ -270,12 +399,41 @@ Answer:
 
         # On failure
         if not cols and final_error:
+            try:
+                append_log_to_s3(entry)
+            except Exception as e:
+                logger.error(f"Failed to append failed execution log to S3: {e}")
+
             return {
                 "success": False,
                 "error": "We don’t have the appropriate data to satisfy that request right now.",
                 "attempts": entry["attempts"]
             }
 
+        if cols and len(rows) == 0:
+            entry.update({
+                "final_sql": sql,
+                "columns": cols,
+                "row_count": 0,
+                "note": "Valid SQL but no data returned",
+                "success": True
+            })
+            try:
+                append_log_to_s3(entry)
+            except Exception as e:
+                logger.error(f"Failed to append 0-row log to S3: {e}")
+        else:
+            entry.update({
+                "final_sql": sql,
+                "columns": cols,
+                "row_count": len(rows),
+                "success": True,
+                "note": "Query succeeded"
+            })
+            try:
+                append_log_to_s3(entry)
+            except Exception as e:
+                logger.error(f"Failed to append success log to S3: {e}")
         # Success
         self.history.append({"sql": sql, "cols": cols, "rows": rows})
 
@@ -296,7 +454,8 @@ Answer:
                     "columns": cols,
                     "rows": rows,
                     "sql": sql,
-                    "csv_download_path": str(download_path)
+                    "csv_download_path": str(download_path),
+                    "csv_download_buffer": buf.getvalue()
                 }
 
             return {

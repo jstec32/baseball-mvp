@@ -1,4 +1,6 @@
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import psycopg2
 from dotenv import load_dotenv
@@ -121,7 +123,7 @@ def visualize_recent_hitter_stats_table(data, hitter_name, color_dict=None, tabl
     if return_fig:
         return fig
     else:
-        plt.show()
+        plt.close(fig)
 
 
 # Main function for testing

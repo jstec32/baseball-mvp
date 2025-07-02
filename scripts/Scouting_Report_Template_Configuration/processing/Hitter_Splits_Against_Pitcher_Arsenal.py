@@ -1,4 +1,6 @@
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import psycopg2
 from dotenv import load_dotenv
@@ -114,7 +116,7 @@ def plot_hitter_splits_table(data, hitter_id, color_dict, return_fig=False):
     if return_fig:
         return fig
     else:
-        plt.show()
+        plt.close(fig)
 
 
 # Main function for manual testing
@@ -138,7 +140,7 @@ def generate_hitter_splits_visual(pitcher_id, hitter_id):
     }
     # Generate table figure
     fig = plot_hitter_splits_table(hitter_splits_data, hitter_id, color_dict=pitch_colours, return_fig=True)
-    plt.show()
+    plt.close(fig)
     return {"hitter_splits_table": fig}
 
 

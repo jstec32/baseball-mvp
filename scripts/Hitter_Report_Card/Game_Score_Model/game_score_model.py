@@ -190,6 +190,8 @@ final_csv_path = "final_tuned_hitter_game_scores.csv"
 final_data.to_csv(final_csv_path, index=False)
 print(f"Saved final tuned Game Score dataset to {final_csv_path}")
 
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import pearsonr
@@ -200,7 +202,7 @@ sns.scatterplot(x=final_data["wOBA"], y=final_data["game_score"])
 plt.xlabel("wOBA")
 plt.ylabel("Game Score")
 plt.title("Comparison of wOBA vs. Game Score")
-plt.show()
+plt.close(fig)
 
 valid_data = final_data[["wOBA", "game_score"]].replace([np.inf, -np.inf], np.nan).dropna()
 
@@ -216,6 +218,8 @@ print("Game Score Summary:")
 print(final_data["game_score"].describe())
 
 # Optional: visualize
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 
 plt.hist(final_data["game_score"], bins=50, color="skyblue", edgecolor="black")
@@ -224,7 +228,7 @@ plt.title("Distribution of Hitter Game Scores")
 plt.xlabel("Game Score")
 plt.ylabel("Frequency")
 plt.legend()
-plt.show()
+plt.close(fig)
 
 # Create Plate Appearances column
 final_data["plate_appearances"] = (
@@ -284,6 +288,8 @@ corr, _ = pearsonr(valid["regression_game_score"], valid["wOBA"])
 
 print(f"📈 Pearson Correlation (wOBA vs Regression-Based Game Score): {corr:.3f}")
 
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -325,7 +331,7 @@ plt.xlabel("wOBA")
 plt.ylabel("Regression-Based Game Score")
 plt.title("Comparison of wOBA vs. Regression-Based Game Score")
 plt.grid(True)
-plt.show()
+plt.close(fig)
 
 # 1. Get mean and standard deviation of the regression scores
 mean_score = final_data["regression_game_score"].mean()
@@ -338,6 +344,8 @@ final_data["scaled_game_score"] = (
 
 final_data["scaled_game_score"] = final_data["scaled_game_score"].round(1)
 
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 
 plt.figure(figsize=(10, 6))
@@ -348,5 +356,5 @@ plt.xlabel("Scaled Game Score")
 plt.ylabel("Frequency")
 plt.legend()
 plt.grid(True)
-plt.show()
+plt.close(fig)
 

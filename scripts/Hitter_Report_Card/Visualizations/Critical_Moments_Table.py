@@ -5,6 +5,8 @@ from io import StringIO
 import requests
 from io import BytesIO
 from PIL import Image
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import pandas as pd
 import requests
@@ -301,7 +303,7 @@ def visualize_critical_moments_table(data, team_name, game_id, return_fig=False)
     if return_fig:
         return fig
     else:
-        plt.show()
+        plt.close(fig)
 
 
 def generate_critical_moments_visual(game_id):

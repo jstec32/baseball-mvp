@@ -1,4 +1,6 @@
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import psycopg2
 from dotenv import load_dotenv
@@ -77,7 +79,7 @@ def plot_usage_rate(data, pitcher_id, return_fig=False):
     if return_fig:
         return fig
     else:
-        plt.show()
+        plt.close(fig)
 
 
 # Generate a table for other stats
@@ -105,7 +107,7 @@ def plot_pitch_arsenal_table(data, pitcher_id, return_fig=False):
     if return_fig:
         return fig
     else:
-        plt.show()
+        plt.close(fig)
 
 
 def generate_pitch_arsenal_data(pitcher_id):

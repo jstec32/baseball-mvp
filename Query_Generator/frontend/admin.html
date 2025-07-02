@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Logs – Baseball Analytics</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?display=swap&family=Noto+Sans:wght@400;500;700;900&family=Plus+Jakarta+Sans:wght@400;500;700;800" />
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+</head>
+
+<body class="bg-gray-50" style='font-family:"Plus Jakarta Sans","Noto Sans",sans-serif'>
+  <!-- HEADER -->
+  <header class="flex items-center justify-between border-b border-[#eaedf1] px-10 py-3">
+    <h2 class="text-lg font-bold tracking-tight">Admin Logs – Baseball Analytics</h2>
+    <a href="index.html" class="text-[#699bcd] font-bold text-sm">← Back to Queries</a>
+  </header>
+
+  <!-- LOGS SECTION -->
+  <main class="p-6 flex flex-col gap-4 max-w-[920px] mx-auto">
+    <div class="flex justify-between items-center">
+      <h3 class="text-2xl font-bold">Query Error Logs</h3>
+      <button id="download-logs-btn" class="rounded-full bg-[#699bcd] text-white text-sm font-bold px-4 py-2">Download JSONL</button>
+    </div>
+
+    <!-- SUCCESS RATE DISPLAY -->
+    <div class="p-4 rounded-xl bg-green-50 border border-green-200">
+      <h4 class="text-md font-semibold text-green-800">Query Generator Success Rate</h4>
+      <p id="success-rate" class="text-xl font-mono text-green-900 mt-1">Loading...</p>
+    </div>
+
+    <!-- RAW LOGS -->
+    <pre id="logs-output" class="whitespace-pre-wrap bg-white border border-[#d4dbe2] rounded-xl p-4 h-[70vh] overflow-y-auto text-sm"></pre>
+  </main>
+
+  <script>
+    const logsOutput = document.getElementById("logs-output");
+    const downloadBtn = document.getElementById("download-logs-btn");
+    const successRateEl = document.getElementById("success-rate");
+
+    async function fetchLogs() {
+      const res = await fetch("http://localhost:8000/admin/logs");
+      const data = await res.json();
+
+      const logs = data.logs
+        .split('\n')
+        .filter(line => line.trim())
+        .map(line => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      const total = logs.length;
+      const successful = logs.filter(l => l.success === true).length;
+      const rate = total === 0 ? 0 : ((successful / total) * 100).toFixed(1);
+
+      successRateEl.textContent = `${rate}% success (${successful}/${total})`;
+      logsOutput.textContent = data.logs || "No logs available.";
+    }
+
+    downloadBtn.addEventListener("click", () => {
+      window.open("http://localhost:8000/admin/logs/download", "_blank");
+    });
+
+    // fetch on load
+    fetchLogs();
+  </script>
+</body>
+</html>

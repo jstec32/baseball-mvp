@@ -3,6 +3,8 @@ import os
 import psycopg2
 import pandas as pd
 import seaborn as sns
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 from matplotlib.patches import Rectangle
@@ -291,6 +293,6 @@ if __name__ == "__main__":
 
     if result:
         print("Combined heatmap generated in memory.")
-        plt.show()  # Display the heatmap
+        plt.close(fig)  # Display the heatmap
     else:
         print("Failed to generate heatmaps.")

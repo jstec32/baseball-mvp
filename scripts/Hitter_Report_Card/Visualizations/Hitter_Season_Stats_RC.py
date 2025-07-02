@@ -1,4 +1,6 @@
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import psycopg2
 from dotenv import load_dotenv
@@ -201,7 +203,7 @@ def visualize_recent_hitter_stats_table(data, team_name: str, hitter_name: str, 
     if return_fig:
         return fig
     else:
-        plt.show()
+        plt.close(fig)
 
 
 # Main function for testing
@@ -215,5 +217,5 @@ def generate_hitter_season_stats_visual(key_mlbam):
     print(f"Fetched stats for {hitter_name} ({team_name}).")
 
     fig = visualize_recent_hitter_stats_table(stats_df, team_name, hitter_name, return_fig=True)
-    plt.show()
+    plt.close(fig)
     return fig, hitter_name, team_name

@@ -4,6 +4,8 @@ from typing import Optional, List
 import pandas as pd
 from matplotlib import axes, pyplot as plt
 from pybaseball import plot_stadium
+import matplotlib
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from pybaseball.plotting import transform_coordinates, STADIUM_SCALE
