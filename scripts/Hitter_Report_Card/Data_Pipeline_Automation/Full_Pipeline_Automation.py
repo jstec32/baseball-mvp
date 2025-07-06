@@ -20,6 +20,7 @@ from scripts.Hitter_Report_Card.Data_Pipeline_Automation.pitcher_game_logs impor
 
 # Specify your missing dates here
 yesterday = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+print(yesterday)
 missing_dates = [yesterday]
 
 def process_data_for_dates(dates):

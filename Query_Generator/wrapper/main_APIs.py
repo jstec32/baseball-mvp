@@ -191,3 +191,39 @@ def get_division_standings():
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
+@app.get("/standings/wildcard")
+def get_wild_card_standings():
+    try:
+        url = "https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2025&standingsTypes=wildCard"
+        res = requests.get(url)
+        res.raise_for_status()
+        data = res.json()
+
+        rows = []
+        for record in data["records"]:
+            league_id = record.get("league", {}).get("id")
+            league = "AL" if league_id == 103 else "NL"
+
+            for team in record["teamRecords"]:
+                rows.append({
+                    "league": league,
+                    "rank": int(team["wildCardRank"]),
+                    "team": team["team"]["name"],
+                    "wins": team["wins"],
+                    "losses": team["losses"],
+                    "pct": team["winningPercentage"],
+                    "gb": team["wildCardGamesBack"],
+                    "streak": team["streak"]["streakCode"]
+                })
+
+        # Convert to DataFrame and group by league
+        df = pd.DataFrame(rows).sort_values(["league", "rank"])
+
+        grouped = {}
+        for league, group in df.groupby("league"):
+            grouped[league] = group.drop(columns="league").to_dict(orient="records")
+
+        return {"success": True, "standings": grouped}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
