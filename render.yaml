@@ -1,31 +1,17 @@
 services:
   - type: web
-    name: baseball-api
+    name: baseball-mvp-api
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn Query_Generator.wrapper.main_APIs:app --host 0.0.0.0 --port 10000"
-    envVars:
-      - fromGroup: common-env
+    region: oregon
+    plan: free
+    buildCommand: ""
+    startCommand: uvicorn main_apis:app --host 0.0.0.0 --port 10000
+    autoDeploy: true
 
-  - type: worker
-    name: daily-pipeline
-    env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python scripts/daily_ingestion.py"
-    schedule: "@daily"
     envVars:
-      - fromGroup: common-env
-
-envVarGroups:
-  - name: common-env
-    envVars:
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: AWS_REGION
-        sync: false
       - key: DB_HOST
+        sync: false
+      - key: DB_PORT
         sync: false
       - key: DB_NAME
         sync: false
@@ -33,11 +19,10 @@ envVarGroups:
         sync: false
       - key: DB_PASSWORD
         sync: false
-      - key: DB_PORT
+      - key: AWS_ACCESS_KEY_ID
         sync: false
-      - key: SCOUTING_REPORTS_S3_BUCKET
+      - key: AWS_SECRET_ACCESS_KEY
         sync: false
-      - key: STATCAST_S3_BUCKET
+      - key: AWS_REGION
         sync: false
-      - key: STATCAST_S3_PATH
-        sync: false
+
