@@ -1,13 +1,9 @@
 services:
   - type: web
     name: baseball-mvp-api
-    env: python
-    region: oregon
+    env: docker
     plan: free
-    buildCommand: ./render-build.sh
-    startCommand: uvicorn Query_Generator.wrapper.main_APIs:app --host 0.0.0.0 --port $PORT
     autoDeploy: true
-
     envVars:
       - key: DB_HOST
         sync: false
@@ -25,6 +21,7 @@ services:
         sync: false
       - key: AWS_REGION
         sync: false
+
 
 
 
