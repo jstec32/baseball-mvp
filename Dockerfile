@@ -2,7 +2,6 @@ FROM python:3.10
 
 WORKDIR /app
 
-# System deps needed for rembg/pymatting/numba
 RUN apt-get update && apt-get install -y \
     build-essential \
     libgl1-mesa-glx \
@@ -10,7 +9,11 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     liblapack-dev \
     gfortran \
-    ffmpeg
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
