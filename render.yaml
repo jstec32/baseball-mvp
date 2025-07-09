@@ -22,6 +22,17 @@ services:
       - key: AWS_REGION
         sync: false
 
+  - type: web
+    name: baseball-mvp-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    rootDir: Query_Generator/frontend
+    envVars:
+      - key: VITE_API_URL
+        value: https://baseball-mvp-api.onrender.com
+
+
 
 
 
