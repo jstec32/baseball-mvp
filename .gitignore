@@ -176,4 +176,8 @@ StatCast CSV Data/
 docs/*.csv
 models/*.pkl
 StatCast CSV Data/
-.env
+# Ignore all .env files...
+*.env
+
+# ...except the frontend one
+!Query_Generator/frontend/.env
