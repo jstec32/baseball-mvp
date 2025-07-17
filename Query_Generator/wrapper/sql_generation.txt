@@ -549,6 +549,35 @@ FROM (
 ) t
 WHERE t.runs_through_8 > t.opp_runs_through_8;
 
+Q: Compare Ben Williamson and Eugenio Suarez's hitting stats in the 2025 season.
+A:
+SELECT
+  hs.name,
+  hs.team,
+  hs.games,
+  hs.plate_appearances,
+  hs.at_bats,
+  hs.hits,
+  hs.doubles,
+  hs.triples,
+  hs.home_runs,
+  hs.runs,
+  hs.rbi,
+  hs.walks,
+  hs.strikeouts,
+  hs.stolen_bases,
+  hs.batting_average,
+  hs.on_base_percentage,
+  hs.slugging_percentage,
+  hs.ops,
+  hs.wrc_plus
+FROM hitter_season_statistics AS hs
+JOIN players AS pl
+  ON unaccent(hs.name) = unaccent(pl."player_name")
+WHERE hs.season = {{ current_year }}
+  AND unaccent(pl."player_name") IN ('Ben Williamson', 'Eugenio Suarez')
+ORDER BY hs.name;
+
 
 Q: {{user_query}}
 A:
