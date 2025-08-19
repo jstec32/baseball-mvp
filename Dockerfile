@@ -1,9 +1,12 @@
-FROM python:3.10
+FROM ubuntu:22.04
 
-WORKDIR /app
-
+# Install Python & dependencies
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    apt-get install -y software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y python3.10 python3.10-dev python3.10-venv python3-pip && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -16,10 +19,13 @@ RUN apt-get update && \
     libxrender-dev && \
     rm -rf /var/lib/apt/lists/*
 
+# Create app folder and copy files
+WORKDIR /app
 COPY . .
 
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# Install Python deps
+RUN python3.10 -m pip install --upgrade pip
+RUN python3.10 -m pip install -r requirements.txt
 
-CMD ["uvicorn", "Query_Generator.wrapper.main_APIs:app", "--host", "0.0.0.0", "--port", "10000"]
-
+# Run app
+CMD ["python3.10", "-m", "uvicorn", "Query_Generator.wrapper.main_APIs:app", "--host", "0.0.0.0", "--port", "10000"]
