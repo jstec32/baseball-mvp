@@ -2,9 +2,9 @@ FROM python:3.10
 
 WORKDIR /app
 
-# 👇 TEMP DEBUGGING: Don't remove apt lists so we can see error
+# Add extra dependencies for compiling packages
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     build-essential \
     python3.10-dev \
     python3-dev \
@@ -20,7 +20,8 @@ RUN apt-get update && \
     libopenblas-dev \
     liblapack-dev \
     gfortran \
-    ffmpeg
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
