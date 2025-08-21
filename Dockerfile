@@ -24,6 +24,7 @@ WORKDIR /app
 COPY . .
 
 # Install Python deps
+RUN apt-get remove -y python3-blinker || true
 RUN python3.10 -m pip install --upgrade pip
 RUN python3.10 -m pip install -r requirements.txt
 
