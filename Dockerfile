@@ -25,6 +25,7 @@ COPY . .
 
 # Install Python deps
 RUN python3.10 -m pip install --upgrade pip
+RUN python3.10 -m pip uninstall -y blinker
 RUN python3.10 -m pip install -r requirements.txt
 
 # Run app
