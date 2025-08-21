@@ -26,7 +26,7 @@ COPY . .
 # Install Python deps
 RUN python3.10 -m pip install --upgrade pip
 RUN python3.10 -m pip install -r requirements.txt
-RUN python3.10 -m pip install --use-deprecated=legacy-resolver -r requirements.txt
+
 
 # Run app
 CMD ["python3.10", "-m", "uvicorn", "Query_Generator.wrapper.main_APIs:app", "--host", "0.0.0.0", "--port", "10000"]
